@@ -1,4 +1,4 @@
-#Unit-3
+# Unit-3
 
 Hyprland + Quickshell + Waybar rice for Arch Linux, with a NieR:Automata aesthetic.
 
