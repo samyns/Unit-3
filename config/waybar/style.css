@@ -1,0 +1,97 @@
+
+* {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+}
+
+window#waybar {
+  background: rgba(11, 10, 9, 0.92);
+  border-bottom: 1px solid rgba(200, 184, 154, 0.15);
+  color: #c8b89a;
+}
+
+/* WORKSPACES */
+#workspaces button {
+  padding: 0 8px;
+  color: rgba(200, 184, 154, 0.3);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+#workspaces button.active {
+  color: #c8b89a;
+  border-bottom: 2px solid #c8b89a;
+}
+
+#workspaces button:hover {
+  color: rgba(200, 184, 154, 0.7);
+  background: rgba(200, 184, 154, 0.05);
+}
+
+/* WINDOW TITLE */
+#window {
+  color: rgba(200, 184, 154, 0.4);
+  padding: 0 12px;
+  letter-spacing: 1px;
+}
+
+/* TICKER CENTRE */
+#custom-ticker {
+  color: rgba(200, 184, 154, 0.2);
+  letter-spacing: 2px;
+  font-size: 9px;
+}
+
+/* MODULES DROITE */
+#cpu,
+#memory,
+#network,
+#pulseaudio,
+#clock,
+#custom-pomodoro,
+#custom-power {
+  padding: 0 10px;
+  color: rgba(200, 184, 154, 0.5);
+  border-left: 1px solid rgba(200, 184, 154, 0.08);
+  letter-spacing: 1px;
+}
+
+#clock {
+  color: #c8b89a;
+  letter-spacing: 2px;
+}
+
+#cpu {
+  color: #c87060;
+}
+
+#memory {
+  color: #6090c8;
+}
+
+#network {
+  color: #60a880;
+}
+
+#pulseaudio {
+  color: #c8a860;
+}
+
+#custom-pomodoro {
+  color: rgba(200, 184, 154, 0.6);
+  letter-spacing: 2px;
+}
+
+#custom-power {
+  color: rgba(200, 96, 96, 0.5);
+  padding: 0 14px;
+}
+
+#custom-power:hover {
+  color: #c87060;
+  background: rgba(200, 96, 96, 0.08);
+}

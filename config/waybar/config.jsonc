@@ -1,0 +1,79 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 28,
+  "spacing": 0,
+  "modules-left": [
+    "hyprland/workspaces",
+    "hyprland/window"
+  ],
+  "modules-center": [
+    "custom/ticker"
+  ],
+  "modules-right": [
+    "custom/pomodoro",
+    "cpu",
+    "memory",
+    "network",
+    "pulseaudio",
+    "clock",
+    "custom/power"
+  ],
+
+  "hyprland/workspaces": {
+    "format": "{id}",
+    "on-click": "activate"
+  },
+
+  "hyprland/window": {
+    "format": "// {title}",
+    "max-length": 40
+  },
+
+  "cpu": {
+    "format": "CPU {usage}%",
+    "interval": 3
+  },
+
+  "memory": {
+    "format": "MEM {percentage}%",
+    "interval": 3
+  },
+
+  "network": {
+    "format-wifi": "NET {essid}",
+    "format-ethernet": "ETH {ifname}",
+    "format-disconnected": "NET --",
+    "tooltip-format": "{ipaddr}"
+  },
+
+  "pulseaudio": {
+    "format": "VOL {volume}%",
+    "format-muted": "VOL --",
+    "on-click": "pavucontrol"
+  },
+
+  "clock": {
+    "format": "{:%H:%M}",
+    "format-alt": "{:%Y/%m/%d}",
+    "tooltip-format": "{:%A %d %B %Y}"
+  },
+
+  "custom/ticker": {
+    "exec": "echo '接続中 // SCANNING // データ処理 // SYS:ACTIVE // NR-2B@ARCH // 全システム正常 // 起動完了 //'",
+    "interval": 60,
+    "format": "{}"
+  },
+
+  "custom/pomodoro": {
+    "exec": "~/.config/waybar/scripts/pomodoro.sh",
+    "interval": 1,
+    "format": "{}",
+    "on-click": "~/.config/waybar/scripts/pomodoro_toggle.sh"
+  },
+
+  "custom/power": {
+    "format": "⏻",
+    "on-click": "hyprctl dispatch exit"
+  }
+}

@@ -1,0 +1,63 @@
+# ─── Window manager + lockscreen + idle ────────────────
+hyprland
+hyprlock
+hypridle
+xdg-desktop-portal-hyprland
+
+# ─── Bar (Waybar) ──────────────────────────────────────
+waybar
+
+# ─── Quickshell runtime dependencies ───────────────────
+qt5-wayland
+qt6-wayland
+qt6-multimedia-ffmpeg
+gtk4-layer-shell
+
+# ─── Terminal ──────────────────────────────────────────
+kitty
+
+# ─── Audio ─────────────────────────────────────────────
+pipewire
+pipewire-alsa
+pipewire-pulse
+wireplumber
+pavucontrol
+playerctl
+
+# ─── Notifications + polkit ────────────────────────────
+dunst
+polkit-kde-agent
+
+# ─── Screenshots, brightness, clipboard ────────────────
+brightnessctl
+grim
+slurp
+satty
+hyprshot
+wl-clipboard
+
+# ─── Auto-mount removable media ────────────────────────
+udiskie
+udisks2
+
+# ─── Network ───────────────────────────────────────────
+networkmanager
+
+# ─── Fonts ─────────────────────────────────────────────
+ttf-jetbrains-mono
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji
+
+# ─── Shell + prompt ────────────────────────────────────
+fish
+starship
+
+# ─── Python deps used by gen-lockbg.py / pixel-wave ────
+python-cairo
+python-numpy
+python-pillow
+
+# ─── XDG ───────────────────────────────────────────────
+xdg-user-dirs
+xdg-utils

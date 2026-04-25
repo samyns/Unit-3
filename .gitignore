@@ -1,0 +1,33 @@
+# ─── Generated at runtime ──────────────────────────────
+hypr/lockbg.png
+**/lockbg.png
+
+# ─── Personal user override ────────────────────────────
+hypr/user.conf
+**/user.conf
+
+# ─── Caches & logs ─────────────────────────────────────
+**/cache/
+**/Cache/
+**/*.cache
+**/*.log
+
+# ─── Secrets (paranoid net) ────────────────────────────
+**/secrets/
+**/*.key
+**/*.pem
+**/credentials*
+**/.env
+**/.env.*
+
+# ─── Editor / OS junk ──────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Local dev junk ────────────────────────────────────
+*.local.sh
+TODO.local.md

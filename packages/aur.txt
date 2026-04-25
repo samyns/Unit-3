@@ -1,0 +1,5 @@
+# Quickshell — git version required
+quickshell-git
+
+# Wallpaper daemon used in your exec-once
+awww

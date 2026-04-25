@@ -1,0 +1,5 @@
+module Components
+WipeCurtain 1.0 WipeCurtain.qml
+NierButton   1.0 NierButton.qml
+Scanlines    1.0 Scanlines.qml
+CornerDeco   1.0 CornerDeco.qml
