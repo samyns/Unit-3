@@ -9,7 +9,8 @@ set -euo pipefail
 readonly REPO_URL="https://github.com/samyns/Unit-3.git"
 readonly REPO_BRANCH="${MY_DOTS_BRANCH:-main}"
 readonly CLONE_DIR="${TMPDIR:-/tmp}/Unit-3-install-$$"
-readonly BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
+readonly BACKUP_DIR
 readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 # Add support for --pinned flag
 PINNED_MODE=false
