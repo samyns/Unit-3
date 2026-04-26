@@ -3,3 +3,6 @@ quickshell-git
 
 # Wallpaper daemon used in your exec-once
 awww
+
+# Used by Quickshell lockscreen for PAM password verification
+pamtester
