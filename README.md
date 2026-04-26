@@ -63,7 +63,6 @@ Inspired by https://github.com/flickowoa/dotfiles.git
 MIT
 EOF
 
-<img width="1832" height="1404" alt="star-history-2026426" src="https://github.com/user-attachments/assets/6427d0e7-5d9b-49fc-a9a7-975b45d85c37" />
-
+<img width="1832" height="1404" alt="star-history-2026426(1)" src="https://github.com/user-attachments/assets/4e3f2138-4aae-450d-a326-85d194c3f6ca" />
 
 
