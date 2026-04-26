@@ -64,8 +64,6 @@ MIT
 EOF
 
 
-
-
 ## Star History
 
 <a href="https://www.star-history.com/?repos=samyns%2FUnit-3&type=date&legend=top-left">
@@ -75,6 +73,5 @@ EOF
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=samyns/Unit-3&type=date&legend=top-left" />
  </picture>
 </a>
-
 
 
