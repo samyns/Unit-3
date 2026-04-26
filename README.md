@@ -63,15 +63,7 @@ Inspired by https://github.com/flickowoa/dotfiles.git
 MIT
 EOF
 
+<img width="1832" height="1404" alt="star-history-2026426" src="https://github.com/user-attachments/assets/6427d0e7-5d9b-49fc-a9a7-975b45d85c37" />
 
-## Star History
-
-<a href="https://www.star-history.com/?repos=samyns%2FUnit-3&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=samyns/Unit-3&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=samyns/Unit-3&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=samyns/Unit-3&type=date&legend=top-left" />
- </picture>
-</a>
 
 
