@@ -49,6 +49,7 @@ bind = SUPER, B, exec, firefox
 
 Inspired by [caelestia-dots/shell](https://github.com/caelestia-dots/shell).
 
+Inspired by https://github.com/flickowoa/dotfiles.git 
 ## License
 
 MIT
