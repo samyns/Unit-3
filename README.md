@@ -19,6 +19,10 @@ https://github.com/user-attachments/assets/f3366b70-cfa0-46ef-b4f5-e461546364e2
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/samyns/Unit-3/main/install.sh)
 ```
+or
+```
+curl -fsSL https://raw.githubusercontent.com/samyns/Unit-3/main/install.sh | bash
+```
 
 ## What's included
 
