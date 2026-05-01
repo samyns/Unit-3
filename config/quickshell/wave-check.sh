@@ -85,7 +85,7 @@ if [[ -f "$LAST_FRAME" ]]; then
     echo "✓ wave_last_frame.png présent"
 else
     echo "⚠ wave_last_frame.png manquant — génération…"
-    python "$LAST_FRAME_SCRIPT" -o "$LAST_FRAME"
+    python "$LAST_FRAME_SCRIPT" "$REVEAL_VIDEO"
     if [[ -f "$LAST_FRAME" ]]; then
         echo "✓ wave_last_frame.png généré"
     else
