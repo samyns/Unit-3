@@ -373,16 +373,18 @@ ShellRoot {
                 return
             } else if (actionKey.indexOf("connect:") === 0) {
                 var mac = actionKey.substring(8)
-                cmd = "bluetoothctl connect " + mac
+                // connect peut nécessiter trust si pas encore fait
+                cmd = "bluetoothctl trust " + mac + " 2>/dev/null; bluetoothctl connect " + mac
             } else if (actionKey.indexOf("disconnect:") === 0) {
                 var mac2 = actionKey.substring(11)
                 cmd = "bluetoothctl disconnect " + mac2
             } else if (actionKey.indexOf("pair:") === 0) {
                 var mac3 = actionKey.substring(5)
-                cmd = "bluetoothctl trust " + mac3 + " && bluetoothctl pair " + mac3
+                // pair complet : pair → trust → connect (chaque étape attend la précédente)
+                cmd = "bluetoothctl pair " + mac3 + " && bluetoothctl trust " + mac3 + " && sleep 0.5 && bluetoothctl connect " + mac3
             } else if (actionKey.indexOf("remove:") === 0) {
                 var mac4 = actionKey.substring(7)
-                cmd = "bluetoothctl remove " + mac4
+                cmd = "bluetoothctl disconnect " + mac4 + " 2>/dev/null; bluetoothctl remove " + mac4
             }
         }
 
@@ -391,12 +393,29 @@ ShellRoot {
             actProc.running = true
             // refresh state après une seconde
             refreshTimer.restart()
+            // Pour les actions BT pair/connect/disconnect/remove, refresh répété
+            if (slotKey === "top" && subKey === "bluetooth" && actionKey !== "toggle" && actionKey !== "scan") {
+                btRepeatRefresh.count = 0
+                btRepeatRefresh.running = true
+            }
         }
     }
     Timer {
         id: refreshTimer
         interval: 800; repeat: false
         onTriggered: { pollWifi.running = true; pollBt.running = true }
+    }
+    // Refresh BT répété après une action pair/connect (peut prendre 5-10s)
+    Timer {
+        id: btRepeatRefresh
+        interval: 1500
+        repeat: true
+        property int count: 0
+        onTriggered: {
+            pollBt.running = true
+            count += 1
+            if (count >= 6) { running = false; count = 0 }
+        }
     }
 
     function activateCurrent() {
@@ -538,11 +557,22 @@ ShellRoot {
 
             // ── Conteneur clavier + croix ──
             Item {
+                id: keyHandler
                 anchors.fill: parent
                 visible: isActive
                 opacity: (root.open && !root.closing) ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 220 } }
                 focus: root.open && !root.closing && isActive
+
+                // Reprendre le focus clavier quand le prompt Wi-Fi se ferme
+                Connections {
+                    target: root
+                    function onWifiPromptSSIDChanged() {
+                        if (root.wifiPromptSSID === "") {
+                            keyHandler.forceActiveFocus()
+                        }
+                    }
+                }
 
                 Keys.onPressed: function(e) {
                     var k = e.key
