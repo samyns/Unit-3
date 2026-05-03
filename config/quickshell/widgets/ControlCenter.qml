@@ -29,8 +29,8 @@ ShellRoot {
     readonly property color colLight:    "#f5edd5"
 
     // ── Layout ──
-    readonly property int  slotGapV: 200
-    readonly property int  slotGapH: 400
+    readonly property int  slotGapV: 150
+    readonly property int  slotGapH: 350
     readonly property int  panShiftV: 320   // vertical (top/bottom) : centre l'ensemble sub+settings
     readonly property int  panShiftH: 700   // horizontal (left/right) : sub-menu traverse l'écran
 
@@ -96,7 +96,7 @@ ShellRoot {
             }
             return acts
         }
-        // Bluetooth : toggle + scan + un bouton par device avec actions adaptées
+        // Bluetooth
         if (key === "top.bluetooth") {
             var acts2 = [{key:"toggle", label: btEnabled ? "Disable Bluetooth" : "Enable Bluetooth"}]
             if (btEnabled) {
@@ -110,7 +110,6 @@ ShellRoot {
                     else if (d.paired)    aKey = "connect:"    + d.mac
                     else                  aKey = "pair:"       + d.mac
                     acts2.push({key: aKey, label: label})
-                    // Bouton remove pour les devices paired
                     if (d.paired) {
                         acts2.push({key: "remove:" + d.mac, label: "    × Remove " + d.name})
                     }
@@ -118,16 +117,104 @@ ShellRoot {
             }
             return acts2
         }
+        // Audio Output : liste des sinks
+        if (key === "bottom.output") {
+            var acts3 = []
+            for (var k = 0; k < audioSinks.length; k++) {
+                var s = audioSinks[k]
+                var pre = s.isDefault ? "✓ " : "  "
+                acts3.push({key: "set-sink:" + s.name, label: pre + s.description})
+            }
+            if (acts3.length === 0) acts3.push({key:"none", label:"No outputs found"})
+            return acts3
+        }
+        // Audio Volume : pas de liste, juste le slider (rendu séparément)
+        if (key === "bottom.volume") {
+            return [{key:"mute-toggle", label: audioMuted ? "Unmute" : "Mute"}]
+        }
+        // Quickshare Send : "Pick file" + liste des devices KDE Connect
+        if (key === "left.send") {
+            if (!kdeConnectAvailable) {
+                return [{key:"install", label:"Install KDE Connect"}]
+            }
+            var acts4 = [{key:"pick-file", label: pendingFilePath
+                ? "✓ " + pendingFilePath.split("/").pop()
+                : "⌕ Pick file with Yazi"}]
+            if (pendingFilePath !== "") {
+                acts4.push({key:"clear-file", label: "× Cancel selection"})
+            }
+            // Liste des devices reachable + bouton send si fichier sélectionné
+            for (var l = 0; l < kdeDevices.length; l++) {
+                var dev = kdeDevices[l]
+                var prefix = dev.reachable ? "✓ " : "· "
+                if (pendingFilePath !== "" && dev.reachable) {
+                    acts4.push({key: "send-to:" + dev.id, label: "→ Send to " + dev.name})
+                } else {
+                    acts4.push({key: "info:" + dev.id, label: prefix + dev.name})
+                }
+            }
+            // Pairing : refresh + pair de nouveaux devices
+            acts4.push({key:"refresh", label: "⌕ Refresh / Scan devices"})
+            return acts4
+        }
+        // Quickshare Receive : liste des devices avec actions de pairing
+        if (key === "left.receive") {
+            if (!kdeConnectAvailable) {
+                return [{key:"install", label:"Install KDE Connect"}]
+            }
+            var acts5 = []
+            for (var m = 0; m < kdeDevices.length; m++) {
+                var dev2 = kdeDevices[m]
+                var pre = dev2.reachable ? "✓ " : "· "
+                acts5.push({key: "info:" + dev2.id, label: pre + dev2.name})
+                // Pour les devices reachable mais pas trusted, proposer pair
+                acts5.push({key: "pair:" + dev2.id, label: "    + Pair " + dev2.name})
+                acts5.push({key: "unpair:" + dev2.id, label: "    × Unpair " + dev2.name})
+            }
+            acts5.push({key:"refresh", label: "⌕ Refresh / Scan devices"})
+            acts5.push({key:"open-settings", label: "Open KDE Connect Settings"})
+            return acts5
+        }
+        // Notifications History
+        if (key === "right.history") {
+            var acts6 = []
+            for (var p = 0; p < notifications.length; p++) {
+                var n2 = notifications[p]
+                acts6.push({
+                    key: "notif:" + p,
+                    label: n2.summary || "(empty)",
+                    body: n2.body || "",
+                    app: n2.app || "",
+                    appIcon: n2.appIcon || "",
+                    category: n2.category || "",
+                    urgency: n2.urgency || "normal",
+                    timeout: n2.timeout >= 0 ? n2.timeout : -1,
+                    desktopEntry: n2.desktopEntry || "",
+                    actions: n2.actions || [],
+                    notifIdx: p
+                })
+            }
+            return acts6
+        }
+        // Notifications DND
+        if (key === "right.dnd") {
+            return [{key:"toggle-dnd", label: dndEnabled ? "Disable DND" : "Enable DND"}]
+        }
         // Autres : actions statiques du dictionnaire details
         var dd = root.details[key]
         return dd ? dd.actions : []
     }
 
-    // ── h3/status dynamique pour Wi-Fi/BT ──
     function detailH3() {
         var key = detailKey()
-        if (key === "top.wifi")      return "Wi-Fi"
-        if (key === "top.bluetooth") return "Bluetooth"
+        if (key === "top.wifi")          return "Wi-Fi"
+        if (key === "top.bluetooth")     return "Bluetooth"
+        if (key === "bottom.output")     return "Audio Output"
+        if (key === "bottom.volume")     return "Volume"
+        if (key === "left.send")         return "Send Files"
+        if (key === "left.receive")      return "Receive Files"
+        if (key === "right.history")     return "Notifications"
+        if (key === "right.dnd")         return "Do Not Disturb"
         var d = root.details[key]
         return d ? d.h3 : ""
     }
@@ -142,17 +229,48 @@ ShellRoot {
             if (!btEnabled) return "Disabled"
             var connected = btDevices.filter(function(d){return d.connected})
             if (connected.length) return "Connected · " + connected[0].name
-            return "Enabled · " + btDevices.length + " paired"
+            return "Enabled · " + btDevices.length + " device" + (btDevices.length !== 1 ? "s" : "")
         }
-        var d = root.details[key]
-        return d ? d.status : ""
+        if (key === "bottom.output") {
+            // Trouver la description du default sink
+            for (var i = 0; i < audioSinks.length; i++) {
+                if (audioSinks[i].isDefault) return audioSinks[i].description
+            }
+            return audioDefaultSink || "—"
+        }
+        if (key === "bottom.volume") {
+            if (audioMuted) return "Muted"
+            return Math.round(audioVolume * 100) + "%"
+        }
+        if (key === "left.send") {
+            if (!kdeConnectAvailable) return "KDE Connect not installed"
+            return kdeDevices.length + " device" + (kdeDevices.length !== 1 ? "s" : "") + " available"
+        }
+        if (key === "left.receive") {
+            if (!kdeConnectAvailable) return "KDE Connect not installed"
+            return "Listening · " + kdeDevices.length + " peer" + (kdeDevices.length !== 1 ? "s" : "")
+        }
+        if (key === "right.history") {
+            return notifications.length + " notification" + (notifications.length !== 1 ? "s" : "")
+        }
+        if (key === "right.dnd") {
+            return dndEnabled ? "Active" : "Off"
+        }
+        var d2 = root.details[key]
+        return d2 ? d2.status : ""
     }
     function detailOn() {
         var key = detailKey()
-        if (key === "top.wifi")      return wifiEnabled
-        if (key === "top.bluetooth") return btEnabled
-        var d = root.details[key]
-        return d ? d.on : false
+        if (key === "top.wifi")          return wifiEnabled
+        if (key === "top.bluetooth")     return btEnabled
+        if (key === "bottom.output")     return true
+        if (key === "bottom.volume")     return !audioMuted
+        if (key === "left.send")         return kdeConnectAvailable && kdeDevices.length > 0
+        if (key === "left.receive")      return kdeConnectAvailable
+        if (key === "right.history")     return notifications.length > 0
+        if (key === "right.dnd")         return dndEnabled
+        var d3 = root.details[key]
+        return d3 ? d3.on : false
     }
     // ── Données système : Wi-Fi ──
     property bool   wifiEnabled: false
@@ -213,6 +331,237 @@ ShellRoot {
     property var    btDevices: []   // [{name, mac, connected, paired}]
     property bool   btScanning: false
     property string wifiPasswordInput: ""
+
+    // ── Données système : Audio ──
+    property var    audioSinks: []        // [{name, description, default}]
+    property string audioDefaultSink: ""
+    property real   audioVolume: 0.5      // 0.0 - 1.0
+    property bool   audioMuted: false
+
+    Timer {
+        interval: 1500; running: root.open && root.slot === "bottom"; repeat: true; triggeredOnStart: true
+        onTriggered: pollAudio.running = true
+    }
+    Process {
+        id: pollAudio
+        command: ["sh","-c",
+            "echo \"DEFAULT:$(pactl get-default-sink 2>/dev/null)\"; " +
+            "echo \"VOLUME:$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | grep -oP '\\d+%' | head -1 | tr -d '%')\"; " +
+            "echo \"MUTE:$(pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null | awk '{print $2}')\"; " +
+            "pactl list short sinks 2>/dev/null | while read line; do " +
+            "  id=$(echo \"$line\" | awk '{print $1}'); " +
+            "  name=$(echo \"$line\" | awk '{print $2}'); " +
+            "  desc=$(pactl list sinks 2>/dev/null | awk -v n=\"$name\" '$1==\"Name:\" && $2==n{f=1} f && /Description:/{$1=\"\"; print substr($0,2); exit}'); " +
+            "  echo \"SINK:$name|$desc\"; " +
+            "done"
+        ]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var lines = this.text.trim().split("\n")
+                var sinks = []
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i]
+                    if (line.indexOf("DEFAULT:") === 0) {
+                        root.audioDefaultSink = line.substring(8).trim()
+                    } else if (line.indexOf("VOLUME:") === 0) {
+                        var v = parseInt(line.substring(7))
+                        if (!isNaN(v)) root.audioVolume = v / 100
+                    } else if (line.indexOf("MUTE:") === 0) {
+                        root.audioMuted = line.substring(5).trim() === "yes"
+                    } else if (line.indexOf("SINK:") === 0) {
+                        var parts = line.substring(5).split("|")
+                        sinks.push({
+                            name: parts[0],
+                            description: parts[1] || parts[0],
+                            isDefault: parts[0] === root.audioDefaultSink
+                        })
+                    }
+                }
+                // Marquer le default sink en re-passant (au cas où il a été lu après les sinks)
+                for (var j = 0; j < sinks.length; j++) {
+                    sinks[j].isDefault = sinks[j].name === root.audioDefaultSink
+                }
+                root.audioSinks = sinks
+            }
+        }
+    }
+
+    // ── Notifications via IPC vers Notifications.qml (qui possède le bus DBus) ──
+    property bool dndEnabled: false
+    property var notifications: []     // [{id, summary, body, app, ts}]
+    property int expandedNotifIdx: -1  // index de la notif expanded (-1 = aucune)
+
+    // Poll l'historique des notifs depuis le daemon Notifications.qml via IPC
+    Timer {
+        interval: 1500
+        running: root.open && root.slot === "right"
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            pollNotifsHistory.running = true
+            pollNotifsDnd.running = true
+        }
+    }
+    Process {
+        id: pollNotifsHistory
+        command: ["sh","-c","qs ipc call notifs getHistory 2>/dev/null"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    var parsed = JSON.parse(this.text.trim() || "[]")
+                    root.notifications = parsed
+                } catch(e) {
+                    root.notifications = []
+                }
+            }
+        }
+    }
+    Process {
+        id: pollNotifsDnd
+        command: ["sh","-c","qs ipc call notifs getDnd 2>/dev/null"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.dndEnabled = this.text.trim() === "true"
+            }
+        }
+    }
+    // Process pour les actions vers le daemon notifs
+    Process {
+        id: notifActProc
+        command: ["sh","-c","true"]
+        running: false
+    }
+
+    // Helpers : appellent l'IPC du daemon
+    function dismissNotif(idx) {
+        notifActProc.command = ["sh","-c","qs ipc call notifs dismissAt " + idx]
+        notifActProc.running = true
+        // Refresh local immédiat (optimiste)
+        var list = root.notifications.slice()
+        list.splice(idx, 1)
+        root.notifications = list
+    }
+    function dismissAllNotifs() {
+        notifActProc.command = ["sh","-c","qs ipc call notifs clearAll"]
+        notifActProc.running = true
+        root.notifications = []
+    }
+    function invokeNotif(idx) {
+        // Le daemon fait invoke + dismiss en un appel
+        dismissNotif(idx)
+    }
+    function setDnd(state) {
+        notifActProc.command = ["sh","-c","qs ipc call notifs setDnd " + (state ? "true" : "false")]
+        notifActProc.running = true
+        dndEnabled = state
+    }
+
+    // ── Données système : Quickshare (KDE Connect) ──
+    property bool   kdeConnectAvailable: true
+    property var    kdeDevices: []   // [{id, name, reachable, trusted, paired}]
+    property string pendingFilePath: ""   // chemin de fichier sélectionné, en attente d'envoi
+
+    Timer {
+        interval: 3000; running: root.open && root.slot === "left"; repeat: true; triggeredOnStart: true
+        onTriggered: pollKde.running = true
+    }
+    Process {
+        id: pollKde
+        // Liste tous les devices (paired et available) avec leur état
+        command: ["sh","-c",
+            "if ! command -v kdeconnect-cli >/dev/null 2>&1; then echo 'NOKDE'; exit; fi; " +
+            // -a : available (joinable), --id-name-only sort: ID NAME
+            "kdeconnect-cli -a --id-name-only 2>/dev/null | sed 's/^/REACHABLE:/'; " +
+            "kdeconnect-cli -l --id-name-only 2>/dev/null | sed 's/^/ALL:/'"
+        ]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var lines = this.text.trim().split("\n")
+                if (lines.length > 0 && lines[0] === "NOKDE") {
+                    root.kdeConnectAvailable = false
+                    root.kdeDevices = []
+                    return
+                }
+                root.kdeConnectAvailable = true
+                var reachable = {}
+                var seen = {}
+                var devices = []
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim()
+                    if (!line) continue
+                    if (line.indexOf("REACHABLE:") === 0) {
+                        var rest = line.substring(10)
+                        var sp = rest.indexOf(" ")
+                        if (sp > 0) reachable[rest.substring(0, sp)] = true
+                    } else if (line.indexOf("ALL:") === 0) {
+                        var rest2 = line.substring(4)
+                        var sp2 = rest2.indexOf(" ")
+                        if (sp2 < 0) continue
+                        var id = rest2.substring(0, sp2)
+                        if (seen[id]) continue
+                        seen[id] = true
+                        devices.push({
+                            id: id,
+                            name: rest2.substring(sp2 + 1).trim(),
+                            reachable: !!reachable[id]
+                        })
+                    }
+                }
+                // Trier : reachable d'abord, puis nom
+                devices.sort(function(a,b){
+                    if (a.reachable !== b.reachable) return a.reachable ? -1 : 1
+                    return a.name.localeCompare(b.name)
+                })
+                root.kdeDevices = devices
+            }
+        }
+    }
+
+    // Process qui lance Yazi pour picker un fichier
+    Process {
+        id: yaziProc
+        running: false
+        command: ["sh","-c","true"]
+        // Le résultat est écrit par yazi dans /tmp/yzi-out, on le lira après
+    }
+    // Timer qui vérifie l'existence du fichier choisi par yazi
+    Timer {
+        id: yaziCheckTimer
+        interval: 500
+        repeat: true
+        property int count: 0
+        onTriggered: {
+            count += 1
+            yaziReadProc.running = true
+            if (count >= 60) { running = false; count = 0 }   // 30s max
+        }
+    }
+    Process {
+        id: yaziReadProc
+        command: ["sh","-c","cat /tmp/yzi-out 2>/dev/null"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var path = this.text.trim()
+                if (path && path !== root.pendingFilePath) {
+                    root.pendingFilePath = path
+                    yaziCheckTimer.running = false
+                    yaziCheckTimer.count = 0
+                    // Rouvre le ControlCenter sur left.send avec le fichier sélectionné
+                    if (!root.open) {
+                        root.open = true
+                        root.closing = false
+                        root.level = 3
+                        root.slot = "left"
+                        root.sub = "send"
+                        root.action = root.firstAction()
+                    }
+                }
+            }
+        }
+    }
 
     Timer {
         interval: 3000; running: root.open && root.slot === "top"; repeat: true; triggeredOnStart: true
@@ -310,6 +659,17 @@ ShellRoot {
     // ── Process pour exécuter les actions ──
     Process { id: actProc; command: ["sh","-c","true"]; running: false }
 
+    // Refresh state quand on change de slot
+    onSlotChanged: {
+        if (slot === "top")    { pollWifi.running = true; pollBt.running = true }
+        if (slot === "bottom") { pollAudio.running = true }
+        if (slot === "left")   { pollKde.running = true }
+        if (slot === "right")  {
+            pollNotifsHistory.running = true
+            pollNotifsDnd.running = true
+        }
+    }
+
     function firstSub(s) { var l = subList(s); return l.length ? l[0].key : "" }
     function firstAction() { var l = actList(); return l.length ? l[0].key : "" }
 
@@ -373,18 +733,113 @@ ShellRoot {
                 return
             } else if (actionKey.indexOf("connect:") === 0) {
                 var mac = actionKey.substring(8)
-                // connect peut nécessiter trust si pas encore fait
                 cmd = "bluetoothctl trust " + mac + " 2>/dev/null; bluetoothctl connect " + mac
             } else if (actionKey.indexOf("disconnect:") === 0) {
                 var mac2 = actionKey.substring(11)
                 cmd = "bluetoothctl disconnect " + mac2
             } else if (actionKey.indexOf("pair:") === 0) {
                 var mac3 = actionKey.substring(5)
-                // pair complet : pair → trust → connect (chaque étape attend la précédente)
                 cmd = "bluetoothctl pair " + mac3 + " && bluetoothctl trust " + mac3 + " && sleep 0.5 && bluetoothctl connect " + mac3
             } else if (actionKey.indexOf("remove:") === 0) {
                 var mac4 = actionKey.substring(7)
                 cmd = "bluetoothctl disconnect " + mac4 + " 2>/dev/null; bluetoothctl remove " + mac4
+            }
+        }
+        // ── Audio Output ──
+        else if (slotKey === "bottom" && subKey === "output") {
+            if (actionKey.indexOf("set-sink:") === 0) {
+                var sink = actionKey.substring(9)
+                cmd = "pactl set-default-sink '" + sink + "'"
+            }
+        }
+        // ── Audio Volume ──
+        else if (slotKey === "bottom" && subKey === "volume") {
+            if (actionKey === "mute-toggle") {
+                cmd = "pactl set-sink-mute @DEFAULT_SINK@ toggle"
+            } else if (actionKey.indexOf("set-volume:") === 0) {
+                var vol = actionKey.substring(11)
+                cmd = "pactl set-sink-volume @DEFAULT_SINK@ " + vol + "%"
+            }
+        }
+        // ── Quickshare Send ──
+        else if (slotKey === "left" && subKey === "send") {
+            if (actionKey === "install") {
+                cmd = "xdg-open https://userbase.kde.org/KDEConnect &"
+            } else if (actionKey === "pick-file") {
+                // Lance le terminal flottant avec yazi, puis ferme le ControlCenter
+                // pour que la fenêtre yazi soit accessible (sinon overlay nous bloque)
+                cmd =
+                    "rm -f /tmp/yzi-out; " +
+                    "if command -v foot >/dev/null 2>&1; then " +
+                    "  foot --app-id qs-yazi-picker yazi --chooser-file=/tmp/yzi-out & " +
+                    "elif command -v alacritty >/dev/null 2>&1; then " +
+                    "  alacritty --class qs-yazi-picker -e yazi --chooser-file=/tmp/yzi-out & " +
+                    "elif command -v kitty >/dev/null 2>&1; then " +
+                    "  kitty --class qs-yazi-picker yazi --chooser-file=/tmp/yzi-out & " +
+                    "elif command -v wezterm >/dev/null 2>&1; then " +
+                    "  wezterm start --class qs-yazi-picker -- yazi --chooser-file=/tmp/yzi-out & " +
+                    "else " +
+                    "  notify-send 'Quickshare' 'No supported terminal found (foot/alacritty/kitty/wezterm)'; " +
+                    "fi"
+                actProc.command = ["sh","-c", cmd]
+                actProc.running = true
+                yaziCheckTimer.count = 0
+                yaziCheckTimer.running = true
+                // Ferme le ControlCenter pour libérer le focus à la fenêtre yazi
+                close()
+                return
+            } else if (actionKey === "clear-file") {
+                pendingFilePath = ""
+                return
+            } else if (actionKey === "refresh") {
+                cmd = "kdeconnect-cli --refresh"
+            } else if (actionKey.indexOf("send-to:") === 0) {
+                var devId = actionKey.substring(8)
+                if (pendingFilePath) {
+                    cmd = "kdeconnect-cli --share '" + pendingFilePath.replace(/'/g, "'\\''") +
+                          "' --device '" + devId + "'"
+                    pendingFilePath = ""
+                }
+            } else if (actionKey.indexOf("info:") === 0) {
+                return  // pas d'action sur info
+            }
+        }
+        // ── Quickshare Receive ──
+        else if (slotKey === "left" && subKey === "receive") {
+            if (actionKey === "install") {
+                cmd = "xdg-open https://userbase.kde.org/KDEConnect &"
+            } else if (actionKey === "open-settings") {
+                cmd = "kdeconnect-app &"
+            } else if (actionKey === "refresh") {
+                cmd = "kdeconnect-cli --refresh"
+            } else if (actionKey.indexOf("pair:") === 0) {
+                var pid = actionKey.substring(5)
+                cmd = "kdeconnect-cli --pair --device '" + pid + "'"
+            } else if (actionKey.indexOf("unpair:") === 0) {
+                var uid = actionKey.substring(7)
+                cmd = "kdeconnect-cli --unpair --device '" + uid + "'"
+            } else if (actionKey.indexOf("info:") === 0) {
+                return
+            }
+        }
+        // ── Notifications History ──
+        else if (slotKey === "right" && subKey === "history") {
+            if (actionKey === "clear-all") {
+                dismissAllNotifs()
+                return
+            } else if (actionKey.indexOf("notif:") === 0) {
+                var idx = parseInt(actionKey.substring(6))
+                invokeNotif(idx)
+                return
+            } else if (actionKey === "none") {
+                return
+            }
+        }
+        // ── Notifications DND ──
+        else if (slotKey === "right" && subKey === "dnd") {
+            if (actionKey === "toggle-dnd") {
+                setDnd(!dndEnabled)
+                return
             }
         }
 
@@ -420,6 +875,16 @@ ShellRoot {
 
     function activateCurrent() {
         if (level === 3 && action) {
+            // Cas spécial notifs : 1er Enter = expand, 2e Enter = invoke
+            if (slot === "right" && sub === "history" && action.indexOf("notif:") === 0) {
+                var idx = parseInt(action.substring(6))
+                if (expandedNotifIdx === idx) {
+                    invokeNotif(idx)
+                } else {
+                    expandedNotifIdx = idx
+                }
+                return
+            }
             dispatchAction(slot, sub, action)
         }
     }
@@ -1072,6 +1537,10 @@ ShellRoot {
                         font.pixelSize: 12
                         color: root.colInk
                         anchors.verticalCenter: parent.verticalCenter
+                        // largeur max : panneau total - dot - margin
+                        width: detailsCol.width - 26
+                        elide: Text.ElideRight
+                        wrapMode: Text.NoWrap
 
                         ScrambleAnim {
                             id: scrambleStatus
@@ -1083,20 +1552,60 @@ ShellRoot {
 
                 Item { width: 1; height: 14 }
 
-                // Liste scrollable des actions (Toggle + réseaux/devices/etc.)
+                // Liste scrollable des actions
+                // Pour les notifs (right.history) : composant NotifBtn avec expand
+                // Pour le reste : ActionBtn standard
                 Item {
+                    id: actListContainer
                     width: parent.width
-                    // Hauteur adaptative : min 1 action, max 8 visibles
+                    property bool isNotifList: sl.slotKey === "right" && root.sub === "history"
                     property int actCount: root.actList().length
-                    height: Math.min(actCount, 8) * 40
-                    visible: actCount > 0
+                    // Hauteur adaptative max 8 visibles, mais hauteur d'item plus grande pour notifs expanded
+                    height: isNotifList
+                        ? Math.min(actCount === 0 ? 1 : Math.max(actCount, 1), 5) * 56 + (root.expandedNotifIdx >= 0 ? 90 : 0)
+                        : Math.min(actCount, 8) * 40
+                    visible: actCount > 0 || isNotifList   // toujours visible pour notifs (pour msg vide)
+
+                    // Message si liste vide (notifs)
+                    Text {
+                        anchors.centerIn: parent
+                        visible: actListContainer.isNotifList && actListContainer.actCount === 0
+                        text: "No notifications"
+                        font.family: "Inter"
+                        font.pixelSize: 11
+                        color: root.colInkSoft
+                        font.letterSpacing: 1
+                    }
 
                     Flickable {
+                        id: actFlick
                         anchors.fill: parent
                         contentWidth: width
                         contentHeight: actCol.implicitHeight
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
+
+                        // Auto-scroll vers la notif focusée
+                        function scrollToFocus() {
+                            var acts = root.actList()
+                            for (var i = 0; i < acts.length; i++) {
+                                if (acts[i].key === root.action) {
+                                    var itemH = actListContainer.isNotifList ? 56 : 40
+                                    var itemY = i * (itemH + 8)
+                                    if (itemY < contentY) {
+                                        contentY = Math.max(0, itemY - 4)
+                                    } else if (itemY + itemH > contentY + height) {
+                                        contentY = Math.min(contentHeight - height, itemY + itemH - height + 4)
+                                    }
+                                    return
+                                }
+                            }
+                        }
+
+                        Connections {
+                            target: root
+                            function onActionChanged() { actFlick.scrollToFocus() }
+                        }
 
                         Column {
                             id: actCol
@@ -1104,13 +1613,198 @@ ShellRoot {
                             spacing: 8
                             Repeater {
                                 model: sl.isInL3 ? root.actList() : []
-                                ActionBtn {
-                                    actionData: modelData
-                                    isFocus: root.action === modelData.key
-                                    enterDelay: 200 + Math.min(index, 5) * 60
+                                Loader {
                                     width: actCol.width
+                                    sourceComponent: actListContainer.isNotifList ? notifBtnComp : actionBtnComp
+                                    property var actionData: modelData
+                                    property bool isFocus: root.action === modelData.key
+                                    property int enterDelay: 200 + Math.min(index, 5) * 60
                                 }
                             }
+                        }
+                    }
+
+                    // Indicateur de scroll visible (track + thumb)
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: 2
+                        color: root.colInk
+                        opacity: 0.15
+                        visible: actFlick.contentHeight > actFlick.height
+
+                        Rectangle {
+                            x: 0
+                            width: 2
+                            color: root.colInk
+                            opacity: 0.7
+                            y: actFlick.contentHeight > 0
+                                ? (actFlick.contentY / actFlick.contentHeight) * parent.height
+                                : 0
+                            height: actFlick.contentHeight > 0
+                                ? Math.max(20, (actFlick.height / actFlick.contentHeight) * parent.height)
+                                : 0
+                        }
+                    }
+                }
+
+                // ── Footer pinned : "Clear All" pour les notifs (visible si notifs > 0) ──
+                Item {
+                    width: parent.width
+                    visible: sl.slotKey === "right" && root.sub === "history" && root.notifications.length > 0
+                    height: visible ? 48 : 0
+
+                    Item { width: 1; height: 14 }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: 14
+                        height: 32
+                        color: clearAllMA.containsMouse ? root.colInk : "transparent"
+                        border.color: root.colInk
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 200 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "× CLEAR ALL"
+                            font.family: "Inter"
+                            font.pixelSize: 11
+                            font.letterSpacing: 2.5
+                            font.weight: Font.Medium
+                            color: clearAllMA.containsMouse ? root.colCard : root.colInk
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                        }
+
+                        MouseArea {
+                            id: clearAllMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.dismissAllNotifs()
+                        }
+                    }
+                }
+
+                // ── Composants pour la liste ──
+                Component {
+                    id: actionBtnComp
+                    ActionBtn {
+                        actionData: parent.actionData
+                        isFocus: parent.isFocus
+                        enterDelay: parent.enterDelay
+                    }
+                }
+                Component {
+                    id: notifBtnComp
+                    NotifBtn {
+                        notifData: parent.actionData
+                        isFocus: parent.isFocus
+                        enterDelay: parent.enterDelay
+                    }
+                }
+
+                // ── Slider Volume (visible quand bottom.volume) ──
+                Item {
+                    width: parent.width
+                    visible: sl.slotKey === "bottom" && root.sub === "volume"
+                    height: visible ? 60 : 0
+
+                    Item { width: 1; height: 14 }
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.topMargin: 14
+                        spacing: 6
+
+                        // Track + thumb
+                        Rectangle {
+                            id: volTrack
+                            width: parent.width
+                            height: 24
+                            color: "transparent"
+                            border.color: root.colInk
+                            border.width: 1
+
+                            // Bordure interne
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 3
+                                color: "transparent"
+                                border.color: root.colInk
+                                border.width: 1
+                                opacity: 0.35
+                            }
+
+                            // Fill (volume actuel)
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 3
+                                width: (parent.width - 6) * (root.audioMuted ? 0 : root.audioVolume)
+                                color: root.colInk
+                                opacity: root.audioMuted ? 0.3 : 1.0
+                                Behavior on width { NumberAnimation { duration: 120 } }
+                                Behavior on opacity { NumberAnimation { duration: 200 } }
+                            }
+
+                            // MouseArea : clic = mute toggle, drag = set volume
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                property bool dragging: false
+                                property real lastX: 0
+
+                                onPressed: function(e) {
+                                    if (e.button === Qt.RightButton) {
+                                        root.dispatchAction("bottom","volume","mute-toggle")
+                                        return
+                                    }
+                                    dragging = true
+                                    lastX = e.x
+                                    setVol(e.x)
+                                }
+                                onReleased: dragging = false
+                                onPositionChanged: function(e) {
+                                    if (dragging) setVol(e.x)
+                                }
+                                onClicked: function(e) {
+                                    // Click simple sans drag : mute/unmute si sur la cellule à droite (au-delà de la ligne actuelle)
+                                    // Sinon set vol
+                                    if (Math.abs(e.x - lastX) < 3) {
+                                        // C'était juste un click : on a déjà appelé setVol, c'est ok
+                                    }
+                                }
+                                onWheel: function(e) {
+                                    var delta = e.angleDelta.y > 0 ? 5 : -5
+                                    var newVol = Math.max(0, Math.min(100, Math.round(root.audioVolume * 100) + delta))
+                                    root.dispatchAction("bottom","volume","set-volume:" + newVol)
+                                }
+
+                                function setVol(x) {
+                                    var w = volTrack.width - 6
+                                    var v = Math.max(0, Math.min(1, (x - 3) / w))
+                                    var pct = Math.round(v * 100)
+                                    root.dispatchAction("bottom","volume","set-volume:" + pct)
+                                }
+                            }
+                        }
+
+                        // Indication mute clickable
+                        Text {
+                            text: root.audioMuted ? "Muted · Click track to unmute" : "Right-click track to mute · Scroll to adjust"
+                            font.family: "Inter"
+                            font.pixelSize: 9
+                            color: root.colInk
+                            opacity: 0.5
+                            font.letterSpacing: 1
                         }
                     }
                 }
@@ -1440,7 +2134,205 @@ ShellRoot {
         }
     }
 
-    // ── Animation scramble (texte qui se révèle lettre par lettre) ──
+    // ── Bouton Notification (avec expand/collapse) ──
+    component NotifBtn: Item {
+        id: nbtn
+        property var notifData
+        property bool isFocus: false
+        property int enterDelay: 0
+        readonly property bool expanded: root.expandedNotifIdx === notifData.notifIdx
+
+        height: 48
+
+        opacity: 0
+        transform: Translate { id: nbtnT; x: -8 }
+        Component.onCompleted: nbtnEnter.start()
+        SequentialAnimation {
+            id: nbtnEnter
+            PauseAnimation { duration: nbtn.enterDelay }
+            ParallelAnimation {
+                NumberAnimation { target: nbtn; property: "opacity"; to: 1; duration: 380; easing.type: Easing.InOutQuint }
+                NumberAnimation { target: nbtnT; property: "x"; to: 0; duration: 380; easing.type: Easing.OutCubic }
+            }
+        }
+
+        // Bordure
+        Rectangle {
+            anchors.fill: parent
+            color: nbtn.isFocus ? root.colInk : "transparent"
+            border.color: root.colInk
+            border.width: 1
+            opacity: nbtn.isFocus ? 1 : 0.5
+            Behavior on color { ColorAnimation { duration: 220 } }
+            Behavior on opacity { NumberAnimation { duration: 220 } }
+        }
+
+        // Curtain
+        Rectangle {
+            anchors.fill: parent
+            color: root.colInk
+            transform: Scale {
+                origin.x: 0; origin.y: 0
+                xScale: nbtn.isFocus ? 1 : 0
+                yScale: 1
+                Behavior on xScale { NumberAnimation { duration: 280; easing.type: Easing.InOutQuint } }
+            }
+            z: 1
+        }
+
+        // Marqueur losange focus
+        Rectangle {
+            width: 5; height: 5; rotation: 45
+            color: root.colCard
+            anchors.left: parent.left
+            anchors.leftMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            opacity: nbtn.isFocus ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            z: 3
+        }
+
+        // Contenu
+        Item {
+            anchors.fill: parent
+            anchors.leftMargin: 18
+            anchors.rightMargin: 36   // place pour le bouton expand
+            anchors.topMargin: 6
+            anchors.bottomMargin: 6
+            z: 2
+
+            // App name (petit, en haut)
+            Text {
+                id: appLabel
+                anchors.top: parent.top
+                anchors.left: parent.left
+                text: nbtn.notifData.app ? nbtn.notifData.app.toUpperCase() : ""
+                font.family: "Inter"
+                font.pixelSize: 8
+                font.letterSpacing: 1.5
+                color: nbtn.isFocus ? root.colCard : root.colInk
+                opacity: 0.6
+                visible: text !== ""
+            }
+
+            // Summary
+            Text {
+                id: summaryLabel
+                anchors.top: appLabel.visible ? appLabel.bottom : parent.top
+                anchors.topMargin: appLabel.visible ? 1 : 0
+                anchors.left: parent.left
+                anchors.right: parent.right
+                text: nbtn.notifData.label
+                font.family: "Inter"
+                font.pixelSize: 11
+                font.weight: Font.Medium
+                color: nbtn.isFocus ? root.colCard : root.colInk
+                elide: Text.ElideRight
+                wrapMode: Text.NoWrap
+            }
+
+            // Body (visible quand expanded)
+            Text {
+                id: bodyLabel
+                anchors.top: summaryLabel.bottom
+                anchors.topMargin: 4
+                anchors.left: parent.left
+                anchors.right: parent.right
+                visible: nbtn.expanded && text !== ""
+                text: nbtn.notifData.body
+                font.family: "Inter"
+                font.pixelSize: 10
+                color: nbtn.isFocus ? root.colCard : root.colInk
+                opacity: 0.85
+                wrapMode: Text.WordWrap
+                maximumLineCount: 4
+                elide: Text.ElideRight
+            }
+
+            // Metadata (visible quand expanded) : urgency, category, timeout, actions
+            Text {
+                anchors.top: bodyLabel.visible ? bodyLabel.bottom : summaryLabel.bottom
+                anchors.topMargin: 4
+                anchors.left: parent.left
+                anchors.right: parent.right
+                visible: nbtn.expanded
+                text: {
+                    var bits = []
+                    var d = nbtn.notifData
+                    if (d.urgency && d.urgency !== "normal") bits.push(d.urgency.toUpperCase())
+                    if (d.category) bits.push("cat:" + d.category)
+                    if (d.timeout > 0) bits.push((d.timeout/1000) + "s")
+                    if (d.desktopEntry) bits.push(d.desktopEntry)
+                    if (d.actions && d.actions.length > 0) {
+                        bits.push(d.actions.length + " action" + (d.actions.length > 1 ? "s" : ""))
+                    }
+                    return bits.join(" · ")
+                }
+                font.family: "Inter"
+                font.pixelSize: 8
+                font.letterSpacing: 1
+                color: nbtn.isFocus ? root.colCard : root.colInk
+                opacity: 0.55
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        // Bouton expand ▸ / ▾
+        Item {
+            id: expandBtn
+            width: 24; height: parent.height
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            z: 4
+
+            Text {
+                anchors.centerIn: parent
+                text: nbtn.expanded ? "▾" : "▸"
+                font.family: "Inter"
+                font.pixelSize: 12
+                color: nbtn.isFocus ? root.colCard : root.colInk
+                opacity: 0.8
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (nbtn.expanded) root.expandedNotifIdx = -1
+                    else root.expandedNotifIdx = nbtn.notifData.notifIdx
+                }
+            }
+        }
+
+        // MouseArea pour clic sur le corps : 1er clic = expand, 2e clic = invoke
+        MouseArea {
+            anchors.fill: parent
+            anchors.rightMargin: 24   // ne pas couvrir le bouton expand
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            z: 0
+            onEntered: root.action = nbtn.notifData.key
+            onClicked: {
+                if (nbtn.expanded) {
+                    // déjà expandu → invoke source
+                    root.invokeNotif(nbtn.notifData.notifIdx)
+                } else {
+                    // pas encore expanded → expand
+                    root.expandedNotifIdx = nbtn.notifData.notifIdx
+                }
+            }
+        }
+
+        // Quand expanded, on agrandit la hauteur
+        states: State {
+            name: "expanded"
+            when: nbtn.expanded
+            PropertyChanges { target: nbtn; height: 140 }
+        }
+        Behavior on height { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+    }
+
+
     component ScrambleAnim: QtObject {
         id: anim
         property Item target: null   // doit avoir une property "targetText"

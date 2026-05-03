@@ -13,6 +13,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Notifications
 import Quickshell.Wayland
 
@@ -38,10 +39,127 @@ Scope {
 
         onNotification: (n) => {
             n.tracked = true;
+
+            // Récupérer les actions sous forme de noms (pour l'affichage)
+            var actionNames = []
+            try {
+                if (n.actions) {
+                    for (var ai = 0; ai < n.actions.length; ai++) {
+                        var a = n.actions[ai]
+                        actionNames.push({
+                            id: a.identifier || "",
+                            text: a.text || ""
+                        })
+                    }
+                }
+            } catch(e) {}
+
+            // Hints / catégorie / urgency level
+            var urgencyLabel = "normal"
+            if (n.urgency === 0) urgencyLabel = "low"
+            else if (n.urgency === 2) urgencyLabel = "critical"
+
+            // Ajouter à l'historique (FIFO 50)
+            var entry = {
+                id: n.id,
+                summary: n.summary || "",
+                body: n.body || "",
+                app: n.appName || "",
+                appIcon: n.appIcon || "",
+                category: n.category || "",
+                urgency: urgencyLabel,
+                timeout: n.expireTimeout >= 0 ? n.expireTimeout : -1,
+                desktopEntry: n.desktopEntry || "",
+                hasImage: n.hasImage || false,
+                actions: actionNames,
+                ts: Date.now(),
+                ref: n
+            }
+            var list = root.history.slice()
+            list.unshift(entry)
+            if (list.length > 50) list = list.slice(0, 50)
+            root.history = list
+
+            if (root.dndEnabled) {
+                n.tracked = false
+            }
         }
     }
 
     readonly property var tracked: notifServer.trackedNotifications
+
+    // ─── Historique persistant en mémoire (max 50, FIFO) ───
+    property var history: []
+    property bool dndEnabled: false
+
+    // ─── IPC : exposer l'historique au ControlCenter ───
+    IpcHandler {
+        target: "notifs"
+
+        function getHistory(): string {
+            var out = []
+            for (var i = 0; i < root.history.length; i++) {
+                var h = root.history[i]
+                out.push({
+                    id: h.id,
+                    summary: h.summary,
+                    body: h.body,
+                    app: h.app,
+                    appIcon: h.appIcon || "",
+                    category: h.category || "",
+                    urgency: h.urgency || "normal",
+                    timeout: h.timeout >= 0 ? h.timeout : -1,
+                    desktopEntry: h.desktopEntry || "",
+                    hasImage: h.hasImage || false,
+                    actions: h.actions || [],
+                    ts: h.ts
+                })
+            }
+            return JSON.stringify(out)
+        }
+
+        function getCount(): int {
+            return root.history.length
+        }
+
+        function dismissAt(idx: int): void {
+            if (idx < 0 || idx >= root.history.length) return
+            var h = root.history[idx]
+            if (h.ref) {
+                try {
+                    // Si la notif a des actions, invoke la première (default)
+                    if (h.ref.actions && h.ref.actions.length > 0) {
+                        h.ref.actions[0].invoke()
+                    }
+                    h.ref.dismiss()
+                } catch(e) {}
+            }
+            var list = root.history.slice()
+            list.splice(idx, 1)
+            root.history = list
+        }
+
+        function clearAll(): void {
+            for (var i = 0; i < root.history.length; i++) {
+                var h = root.history[i]
+                if (h.ref) { try { h.ref.dismiss() } catch(e) {} }
+            }
+            root.history = []
+        }
+
+        function setDnd(state: bool): void {
+            root.dndEnabled = state
+        }
+
+        function getDnd(): bool {
+            return root.dndEnabled
+        }
+
+        function toggleDnd(): bool {
+            root.dndEnabled = !root.dndEnabled
+            return root.dndEnabled
+        }
+    }
 
     Variants {
         model: Quickshell.screens
