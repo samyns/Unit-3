@@ -12,6 +12,9 @@ ShellRoot {
     // ── NOTIFICATIONS ──
     Notifications {}
 
+    // ── CONTROLCENTER ──
+    ControlCenter {}
+
 
     // ── VOLUMEBAR ──
     VolumeBar {}
