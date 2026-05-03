@@ -31,7 +31,8 @@ ShellRoot {
     // ── Layout ──
     readonly property int  slotGapV: 200
     readonly property int  slotGapH: 400
-    readonly property int  panShift: 220
+    readonly property int  panShiftV: 320   // vertical (top/bottom) : centre l'ensemble sub+settings
+    readonly property int  panShiftH: 700   // horizontal (left/right) : laisse la place pour la flèche
 
     // ── État ──
     property bool   open:    false
@@ -74,15 +75,197 @@ ShellRoot {
 
     function detailKey() { return slot + "." + sub }
     function subList(s)  { return root.subs[s] || [] }
-    function actList()   { var d = root.details[detailKey()]; return d ? d.actions : [] }
+
+    // ── Construit la liste d'actions dynamique selon le sub focus ──
+    function actList() {
+        var key = detailKey()
+        // Wi-Fi : toggle + un bouton par réseau scanné
+        if (key === "top.wifi") {
+            var acts = [{key:"toggle", label: wifiEnabled ? "Disable Wi-Fi" : "Enable Wi-Fi"}]
+            if (wifiEnabled) {
+                for (var i = 0; i < wifiNetworks.length; i++) {
+                    var n = wifiNetworks[i]
+                    var prefix = n.active ? "✓ " : "  "
+                    var sigBars = n.signal >= 75 ? "▰▰▰" : n.signal >= 50 ? "▰▰▱" : n.signal >= 25 ? "▰▱▱" : "▱▱▱"
+                    acts.push({
+                        key: "connect:" + n.ssid,
+                        label: prefix + n.ssid + "  " + sigBars
+                    })
+                }
+            }
+            return acts
+        }
+        // Bluetooth : toggle + un bouton par device paired
+        if (key === "top.bluetooth") {
+            var acts2 = [{key:"toggle", label: btEnabled ? "Disable Bluetooth" : "Enable Bluetooth"}]
+            if (btEnabled) {
+                for (var j = 0; j < btDevices.length; j++) {
+                    var d = btDevices[j]
+                    var label = (d.connected ? "✓ " : "  ") + d.name
+                    var aKey = (d.connected ? "disconnect:" : "connect:") + d.mac
+                    acts2.push({key: aKey, label: label})
+                }
+            }
+            return acts2
+        }
+        // Autres : actions statiques du dictionnaire details
+        var d = root.details[key]
+        return d ? d.actions : []
+    }
+
+    // ── h3/status dynamique pour Wi-Fi/BT ──
+    function detailH3() {
+        var key = detailKey()
+        if (key === "top.wifi")      return "Wi-Fi"
+        if (key === "top.bluetooth") return "Bluetooth"
+        var d = root.details[key]
+        return d ? d.h3 : ""
+    }
+    function detailStatus() {
+        var key = detailKey()
+        if (key === "top.wifi") {
+            if (!wifiEnabled) return "Disabled"
+            if (wifiCurrentSSID) return "Connected · " + wifiCurrentSSID
+            return "Enabled · Scanning"
+        }
+        if (key === "top.bluetooth") {
+            if (!btEnabled) return "Disabled"
+            var connected = btDevices.filter(function(d){return d.connected})
+            if (connected.length) return "Connected · " + connected[0].name
+            return "Enabled · " + btDevices.length + " paired"
+        }
+        var d = root.details[key]
+        return d ? d.status : ""
+    }
+    function detailOn() {
+        var key = detailKey()
+        if (key === "top.wifi")      return wifiEnabled
+        if (key === "top.bluetooth") return btEnabled
+        var d = root.details[key]
+        return d ? d.on : false
+    }
+    // ── Données système : Wi-Fi ──
+    property bool   wifiEnabled: false
+    property string wifiCurrentSSID: ""
+    property var    wifiNetworks: []   // [{ssid, signal, security, active}]
+
+    Timer {
+        interval: 3000; running: root.open && root.slot === "top"; repeat: true; triggeredOnStart: true
+        onTriggered: pollWifi.running = true
+    }
+    Process {
+        id: pollWifi
+        // Récupère état radio + liste des réseaux scannés
+        command: ["sh","-c",
+            "echo \"$(nmcli radio wifi 2>/dev/null)\"; " +
+            "nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi 2>/dev/null | head -20"
+        ]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var lines = this.text.trim().split("\n")
+                root.wifiEnabled = (lines[0] || "").trim() === "enabled"
+                var nets = []
+                var current = ""
+                for (var i = 1; i < lines.length; i++) {
+                    var parts = lines[i].split(":")
+                    if (parts.length < 4) continue
+                    var inUse = parts[0] === "*"
+                    var ssid = parts[1]
+                    var signal = parseInt(parts[2]) || 0
+                    var security = parts[3] || "Open"
+                    if (!ssid) continue
+                    if (inUse) current = ssid
+                    nets.push({ssid: ssid, signal: signal, security: security, active: inUse})
+                }
+                root.wifiNetworks = nets
+                root.wifiCurrentSSID = current
+            }
+        }
+    }
+
+    // ── Données système : Bluetooth ──
+    property bool   btEnabled: false
+    property var    btDevices: []   // [{name, mac, connected, paired}]
+
+    Timer {
+        interval: 3000; running: root.open && root.slot === "top"; repeat: true; triggeredOnStart: true
+        onTriggered: pollBt.running = true
+    }
+    Process {
+        id: pollBt
+        // Récupère powered + liste des appareils paired (avec leur état connected)
+        command: ["sh","-c",
+            "echo \"$(bluetoothctl show 2>/dev/null | grep -i 'powered:' | awk '{print $2}')\"; " +
+            "bluetoothctl devices Paired 2>/dev/null | while read line; do " +
+            "  mac=$(echo $line | awk '{print $2}'); " +
+            "  name=$(echo $line | cut -d' ' -f3-); " +
+            "  conn=$(bluetoothctl info $mac 2>/dev/null | grep -i 'Connected:' | awk '{print $2}'); " +
+            "  echo \"$mac|$name|$conn\"; " +
+            "done"
+        ]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var lines = this.text.trim().split("\n")
+                root.btEnabled = (lines[0] || "").trim() === "yes"
+                var devices = []
+                for (var i = 1; i < lines.length; i++) {
+                    var parts = lines[i].split("|")
+                    if (parts.length < 3) continue
+                    devices.push({
+                        mac: parts[0],
+                        name: parts[1] || parts[0],
+                        connected: (parts[2] || "").trim() === "yes"
+                    })
+                }
+                root.btDevices = devices
+            }
+        }
+    }
+
+    // ── Process pour exécuter les actions ──
+    Process { id: actProc; command: ["sh","-c","true"]; running: false }
+
     function firstSub(s) { var l = subList(s); return l.length ? l[0].key : "" }
     function firstAction() { var l = actList(); return l.length ? l[0].key : "" }
 
     // ── Dispatcher des actions de boutons ──
-    // Pour l'instant : juste un log (sera implémenté à l'étape suivante)
     function dispatchAction(slotKey, subKey, actionKey) {
         console.log("[ControlCenter] action:", slotKey + "." + subKey + "." + actionKey)
-        // TODO: branchement réel pour Wi-Fi, BT, Audio, Quickshare, Notifications
+        var cmd = ""
+
+        // ── Wi-Fi ──
+        if (slotKey === "top" && subKey === "wifi") {
+            if (actionKey === "toggle") {
+                cmd = "nmcli radio wifi " + (wifiEnabled ? "off" : "on")
+            } else if (actionKey.indexOf("connect:") === 0) {
+                var ssid = actionKey.substring(8)
+                cmd = "nmcli dev wifi connect '" + ssid + "' || nm-connection-editor &"
+            }
+        }
+        // ── Bluetooth ──
+        else if (slotKey === "top" && subKey === "bluetooth") {
+            if (actionKey === "toggle") {
+                cmd = "bluetoothctl power " + (btEnabled ? "off" : "on")
+            } else if (actionKey.indexOf("connect:") === 0) {
+                var mac = actionKey.substring(8)
+                cmd = "bluetoothctl connect " + mac
+            } else if (actionKey.indexOf("disconnect:") === 0) {
+                var mac2 = actionKey.substring(11)
+                cmd = "bluetoothctl disconnect " + mac2
+            }
+        }
+
+        if (cmd) {
+            actProc.command = ["sh","-c", cmd]
+            actProc.running = true
+            // refresh state après une seconde
+            refreshTimer.restart()
+        }
+    }
+    Timer {
+        id: refreshTimer
+        interval: 800; repeat: false
+        onTriggered: { pollWifi.running = true; pollBt.running = true }
     }
 
     function activateCurrent() {
@@ -251,14 +434,14 @@ ShellRoot {
                     // Pan global : le cross glisse pour amener le slot focusé vers le centre
                     anchors.horizontalCenterOffset: {
                         if (root.level !== 3) return 0
-                        if (root.slot === "left")  return  root.panShift
-                        if (root.slot === "right") return -root.panShift
+                        if (root.slot === "left")  return  root.panShiftH
+                        if (root.slot === "right") return -root.panShiftH
                         return 0
                     }
                     anchors.verticalCenterOffset: {
                         if (root.level !== 3) return 0
-                        if (root.slot === "top")    return  root.panShift
-                        if (root.slot === "bottom") return -root.panShift
+                        if (root.slot === "top")    return  root.panShiftV
+                        if (root.slot === "bottom") return -root.panShiftV
                         return 0
                     }
                     Behavior on anchors.horizontalCenterOffset {
@@ -337,7 +520,7 @@ ShellRoot {
     component NierArrow: Item {
         id: ar
         property string axis: "top"
-        width: 42; height: 42
+        width: 36; height: 36
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.verticalCenter:   parent.verticalCenter
@@ -630,8 +813,8 @@ ShellRoot {
 
             anchors.left: sl.slotKey === "left" ? undefined : parent.right
             anchors.right: sl.slotKey === "left" ? parent.left : undefined
-            anchors.leftMargin: 80
-            anchors.rightMargin: 80
+            anchors.leftMargin: 30
+            anchors.rightMargin: 30
             anchors.verticalCenter: parent.verticalCenter
 
             width: 300
@@ -678,10 +861,7 @@ ShellRoot {
 
                 Text {
                     id: detailH3
-                    property string targetText: {
-                        var d = root.details[root.detailKey()]
-                        return d ? d.h3.toUpperCase() : ""
-                    }
+                    property string targetText: root.detailH3().toUpperCase()
                     text: targetText
                     onTargetTextChanged: scrambleH3.start()
                     font.family: "Inter"
@@ -714,15 +894,9 @@ ShellRoot {
                     Rectangle {
                         width: 8; height: 8; radius: 4
                         anchors.verticalCenter: parent.verticalCenter
-                        color: {
-                            var d = root.details[root.detailKey()]
-                            return (d && d.on) ? root.colHi : root.colInkSoft
-                        }
+                        color: root.detailOn() ? root.colHi : root.colInkSoft
                         SequentialAnimation on opacity {
-                            running: {
-                                var d = root.details[root.detailKey()]
-                                return !!(d && d.on)
-                            }
+                            running: root.detailOn()
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.4; duration: 1100 }
                             NumberAnimation { to: 1.0; duration: 1100 }
@@ -730,10 +904,7 @@ ShellRoot {
                     }
                     Text {
                         id: detailStatus
-                        property string targetText: {
-                            var d = root.details[root.detailKey()]
-                            return d ? d.status : ""
-                        }
+                        property string targetText: root.detailStatus()
                         text: targetText
                         onTargetTextChanged: scrambleStatus.start()
                         font.family: "Inter"
@@ -751,16 +922,34 @@ ShellRoot {
 
                 Item { width: 1; height: 14 }
 
-                Column {
+                // Liste scrollable des actions (Toggle + réseaux/devices/etc.)
+                Item {
                     width: parent.width
-                    spacing: 8
-                    Repeater {
-                        model: sl.isInL3 ? root.actList() : []
-                        ActionBtn {
-                            actionData: modelData
-                            isFocus: root.action === modelData.key
-                            enterDelay: 200 + index * 60
-                            width: detailsCol.width
+                    // Hauteur adaptative : min 1 action, max 8 visibles
+                    property int actCount: root.actList().length
+                    height: Math.min(actCount, 8) * 40
+                    visible: actCount > 0
+
+                    Flickable {
+                        anchors.fill: parent
+                        contentWidth: width
+                        contentHeight: actCol.implicitHeight
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        Column {
+                            id: actCol
+                            width: parent.width
+                            spacing: 8
+                            Repeater {
+                                model: sl.isInL3 ? root.actList() : []
+                                ActionBtn {
+                                    actionData: modelData
+                                    isFocus: root.action === modelData.key
+                                    enterDelay: 200 + Math.min(index, 5) * 60
+                                    width: actCol.width
+                                }
+                            }
                         }
                     }
                 }
