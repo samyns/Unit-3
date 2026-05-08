@@ -8,8 +8,7 @@
 # The ControlCenter must already be loaded by the main Quickshell instance.
 # This script sends an IPC command — it does NOT spawn a new qs process.
 
-set -e
-
+echo "This script is deprecated. Please use 'qs ctrl [toggle|open|close]' instead."
 pkill cloudflared
-# Envoie la commande IPC (target=ctrl, method=$1 ou 'toggle' par défaut)
-exec qs ipc call ctrl "${1:-toggle}"
+echo "Cloudflared stopped."
+exec qs ipc call ctrl toggle
