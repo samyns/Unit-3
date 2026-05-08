@@ -728,12 +728,24 @@ ShellRoot {
 
     // Refresh state quand on change de slot
     onSlotChanged: {
+        cancelWifiPrompt()
         if (slot === "top")    { pollWifi.running = true; pollBt.running = true }
         if (slot === "bottom") { pollAudio.running = true }
         if (slot === "right")  {
             pollNotifsHistory.running = true
             pollNotifsDnd.running = true
         }
+    }
+    onSubChanged: cancelWifiPrompt()
+    onLevelChanged: { if (level !== 3) cancelWifiPrompt() }
+    onOpenChanged:  { if (!open) cancelWifiPrompt() }
+
+    // Cancel le prompt Wi-Fi proprement (fermeture du TextInput, reset focus au keyHandler)
+    function cancelWifiPrompt() {
+        if (wifiPromptSSID === "") return
+        wifiPromptSSID = ""
+        wifiPasswordInput = ""
+        wifiError = ""
     }
 
     function firstSub(s) { var l = subList(s); return l.length ? l[0].key : "" }
@@ -830,20 +842,30 @@ ShellRoot {
         // ── Quickshare Send (qshare.py) ──
         else if (slotKey === "left" && subKey === "send") {
             if (actionKey === "pick-file") {
-                // Lance le terminal flottant avec yazi, puis ferme le ControlCenter
+                // Lance le terminal flottant avec yazi.
+                // 1) On attend ~350ms le temps que le ControlCenter relâche
+                //    son focus exclusif (l'animation de close dure 290ms)
+                // 2) On lance yazi en background
+                // 3) On force le focus via hyprctl au cas où Hyprland ne l'a
+                //    pas donné automatiquement (race condition possible)
                 cmd =
                     "rm -f /tmp/yzi-out; " +
-                    "if command -v foot >/dev/null 2>&1; then " +
-                    "  foot --app-id qs-yazi-picker yazi --chooser-file=/tmp/yzi-out & " +
-                    "elif command -v alacritty >/dev/null 2>&1; then " +
-                    "  alacritty --class qs-yazi-picker -e yazi --chooser-file=/tmp/yzi-out & " +
-                    "elif command -v kitty >/dev/null 2>&1; then " +
-                    "  kitty --class qs-yazi-picker yazi --chooser-file=/tmp/yzi-out & " +
-                    "elif command -v wezterm >/dev/null 2>&1; then " +
-                    "  wezterm start --class qs-yazi-picker -- yazi --chooser-file=/tmp/yzi-out & " +
-                    "else " +
-                    "  notify-send 'qshare' 'No supported terminal found (foot/alacritty/kitty/wezterm)'; " +
-                    "fi"
+                    "( sleep 0.35; " +
+                    "  if command -v foot >/dev/null 2>&1; then " +
+                    "    foot --app-id qs-yazi-picker yazi --chooser-file=/tmp/yzi-out & " +
+                    "  elif command -v alacritty >/dev/null 2>&1; then " +
+                    "    alacritty --class qs-yazi-picker -e yazi --chooser-file=/tmp/yzi-out & " +
+                    "  elif command -v kitty >/dev/null 2>&1; then " +
+                    "    kitty --class qs-yazi-picker yazi --chooser-file=/tmp/yzi-out & " +
+                    "  elif command -v wezterm >/dev/null 2>&1; then " +
+                    "    wezterm start --class qs-yazi-picker -- yazi --chooser-file=/tmp/yzi-out & " +
+                    "  else " +
+                    "    notify-send 'qshare' 'No supported terminal found (foot/alacritty/kitty/wezterm)'; " +
+                    "    exit; " +
+                    "  fi; " +
+                    "  sleep 0.45; " +   // laisser le terminal apparaître
+                    "  hyprctl dispatch focuswindow '^(qs-yazi-picker)$' >/dev/null 2>&1; " +
+                    ") &"
                 actProc.command = ["sh","-c", cmd]
                 actProc.running = true
                 yaziCheckTimer.count = 0
@@ -1089,7 +1111,8 @@ ShellRoot {
                 visible: isActive
                 opacity: (root.open && !root.closing) ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: 220 } }
-                focus: root.open && !root.closing && isActive
+                // Cède le focus au TextInput Wi-Fi quand le prompt est ouvert
+                focus: root.open && !root.closing && isActive && root.wifiPromptSSID === ""
 
                 // Reprendre le focus clavier quand le prompt Wi-Fi se ferme
                 Connections {
@@ -1513,7 +1536,7 @@ ShellRoot {
             Rectangle {
                 id: box
                 anchors.fill: parent
-                color: sl.isCenter ? root.colCard : root.colCardSoft
+                color: root.colCard
                 border.color: root.colInk
                 border.width: 1
 
@@ -1691,10 +1714,10 @@ ShellRoot {
             width: 300
             height: detailsCol.implicitHeight + 36
 
-            // Box stylisée style NieR (fond beige soft + bordure + onglet)
+            // Box stylisée style NieR (fond opaque + bordure + onglet)
             Rectangle {
                 anchors.fill: parent
-                color: root.colCardSoft
+                color: root.colCard
                 border.color: root.colInk
                 border.width: 1
             }
@@ -2097,18 +2120,37 @@ ShellRoot {
                                 font.pixelSize: 13
                                 echoMode: TextInput.Password
                                 clip: true
+                                activeFocusOnTab: true
                                 focus: root.wifiPromptSSID !== ""
                                 onTextChanged: root.wifiPasswordInput = text
                                 onAccepted: root.dispatchAction("top","wifi","submit-password")
                                 Keys.onEscapePressed: root.dispatchAction("top","wifi","cancel-prompt")
-                                // Reset à l'ouverture du prompt
-                                Connections {
-                                    target: root
-                                    function onWifiPromptSSIDChanged() {
+
+                                // Timer pour forcer le focus après que le widget soit rendu
+                                // (le focus immédiat est volé par le keyHandler parent)
+                                Timer {
+                                    id: pwFocusTimer
+                                    interval: 50
+                                    repeat: false
+                                    onTriggered: {
                                         if (root.wifiPromptSSID !== "") {
                                             pwInput.text = ""
                                             pwInput.forceActiveFocus()
                                         }
+                                    }
+                                }
+                                Connections {
+                                    target: root
+                                    function onWifiPromptSSIDChanged() {
+                                        if (root.wifiPromptSSID !== "") {
+                                            pwFocusTimer.restart()
+                                        }
+                                    }
+                                }
+                                // Au cas où le widget devient visible avant que la propriété change
+                                onVisibleChanged: {
+                                    if (visible && root.wifiPromptSSID !== "") {
+                                        pwFocusTimer.restart()
                                     }
                                 }
                             }
@@ -2211,23 +2253,22 @@ ShellRoot {
             }
         }
 
-        Rectangle {
-            anchors.fill: parent
-            color: "transparent"
-            border.color: si.isFocus ? root.colInk : "transparent"
-            border.width: 1
-            Behavior on border.color { ColorAnimation { duration: 200 } }
-        }
-
+        // Fond opaque permanent
         Rectangle {
             anchors.fill: parent
             color: root.colCard
-            transform: Scale {
-                origin.x: 0; origin.y: 0
-                xScale: si.isFocus ? 1 : 0
-                yScale: 1
-                Behavior on xScale { NumberAnimation { duration: 320; easing.type: Easing.InOutQuint } }
-            }
+            z: 0
+        }
+
+        // Bordure : fine en repos, épaisse au focus
+        Rectangle {
+            anchors.fill: parent
+            color: "transparent"
+            border.color: root.colInk
+            border.width: si.isFocus ? 2 : 1
+            opacity: si.isFocus ? 1.0 : 0.55
+            Behavior on border.width { NumberAnimation { duration: 180 } }
+            Behavior on opacity { NumberAnimation { duration: 180 } }
             z: 1
         }
 
@@ -2239,6 +2280,13 @@ ShellRoot {
             anchors.leftMargin: 8
             anchors.verticalCenter: parent.verticalCenter
             opacity: si.isFocus ? 1 : 0
+            transform: Scale {
+                origin.x: 3; origin.y: 3
+                xScale: si.isFocus ? 1 : 0
+                yScale: si.isFocus ? 1 : 0
+                Behavior on xScale { NumberAnimation { duration: 220; easing.type: Easing.OutBack } }
+                Behavior on yScale { NumberAnimation { duration: 220; easing.type: Easing.OutBack } }
+            }
             Behavior on opacity { NumberAnimation { duration: 200 } }
             z: 3
         }
