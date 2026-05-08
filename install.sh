@@ -368,6 +368,33 @@ enable_services() {
     systemctl --user enable --now pipewire pipewire-pulse wireplumber 2>/dev/null || warn "pipewire: skipped (this is fine if you'll start it from the session)."
 }
 
+
+# ─── qshare CLI symlink ────────────────────────────────────────────
+deploy_qshare_symlink() {
+    local script="$CONFIG_HOME/quickshell/scripts/qshare.py"
+    local link="$HOME/.local/bin/qshare"
+
+    if [[ ! -f "$script" ]]; then
+        warn "qshare.py not found in quickshell/scripts/, skipping symlink."
+        return
+    fi
+
+    mkdir -p "$HOME/.local/bin"
+    if [[ -L "$link" || -e "$link" ]]; then
+        rm -f "$link"
+    fi
+    ln -s "$script" "$link"
+    ok "Symlinked qshare CLI: $link → $script"
+
+    # Vérifier que ~/.local/bin est dans le PATH
+    if ! echo "$PATH" | tr ':' '\n' | grep -qFx "$HOME/.local/bin"; then
+        warn "~/.local/bin is not in your PATH."
+        warn "Add this line to ~/.bashrc.local:"
+        warn "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fi
+}
+
+
 # ─── Final message ─────────────────────────────────────────────────
 finalize() {
     echo
@@ -405,6 +432,7 @@ main() {
     deploy_shell_config
     setup_user_dirs
     apply_vm_software_gl_tweaks_deployed
+    deploy_qshare_symlink
     enable_services
     finalize
 }

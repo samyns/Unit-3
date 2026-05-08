@@ -132,47 +132,34 @@ ShellRoot {
         if (key === "bottom.volume") {
             return [{key:"mute-toggle", label: audioMuted ? "Unmute" : "Mute"}]
         }
-        // Quickshare Send : "Pick file" + liste des devices KDE Connect
+        // Quickshare Send (qshare.py)
         if (key === "left.send") {
-            if (!kdeConnectAvailable) {
-                return [{key:"install", label:"Install KDE Connect"}]
-            }
-            var acts4 = [{key:"pick-file", label: pendingFilePath
+            var acts4 = []
+            acts4.push({key:"pick-file", label: pendingFilePath
                 ? "✓ " + pendingFilePath.split("/").pop()
-                : "⌕ Pick file with Yazi"}]
+                : "⌕ Pick file with Yazi"})
             if (pendingFilePath !== "") {
                 acts4.push({key:"clear-file", label: "× Cancel selection"})
             }
-            // Liste des devices reachable + bouton send si fichier sélectionné
-            for (var l = 0; l < kdeDevices.length; l++) {
-                var dev = kdeDevices[l]
-                var prefix = dev.reachable ? "✓ " : "· "
-                if (pendingFilePath !== "" && dev.reachable) {
-                    acts4.push({key: "send-to:" + dev.id, label: "→ Send to " + dev.name})
-                } else {
-                    acts4.push({key: "info:" + dev.id, label: prefix + dev.name})
-                }
+            acts4.push({key:"toggle-tunnel",
+                label: qshareTunnel ? "[✓] Tunnel (Internet)" : "[ ] Tunnel (Internet)"})
+            acts4.push({key:"toggle-keepalive",
+                label: qshareKeepAlive ? "[✓] Keep alive" : "[ ] Keep alive"})
+            if (pendingFilePath !== "") {
+                acts4.push({key:"start-send", label: "→ Generate QR"})
             }
-            // Pairing : refresh + pair de nouveaux devices
-            acts4.push({key:"refresh", label: "⌕ Refresh / Scan devices"})
             return acts4
         }
-        // Quickshare Receive : liste des devices avec actions de pairing
+        // Quickshare Receive (qshare.py)
         if (key === "left.receive") {
-            if (!kdeConnectAvailable) {
-                return [{key:"install", label:"Install KDE Connect"}]
-            }
             var acts5 = []
-            for (var m = 0; m < kdeDevices.length; m++) {
-                var dev2 = kdeDevices[m]
-                var pre = dev2.reachable ? "✓ " : "· "
-                acts5.push({key: "info:" + dev2.id, label: pre + dev2.name})
-                // Pour les devices reachable mais pas trusted, proposer pair
-                acts5.push({key: "pair:" + dev2.id, label: "    + Pair " + dev2.name})
-                acts5.push({key: "unpair:" + dev2.id, label: "    × Unpair " + dev2.name})
-            }
-            acts5.push({key:"refresh", label: "⌕ Refresh / Scan devices"})
-            acts5.push({key:"open-settings", label: "Open KDE Connect Settings"})
+            var dirShort = qshareOutputDir.replace(home, "~")
+            acts5.push({key:"cycle-output", label: "Output: " + dirShort + " ▸"})
+            acts5.push({key:"toggle-tunnel",
+                label: qshareTunnel ? "[✓] Tunnel (Internet)" : "[ ] Tunnel (Internet)"})
+            acts5.push({key:"toggle-keepalive",
+                label: qshareKeepAlive ? "[✓] Keep alive" : "[ ] Keep alive"})
+            acts5.push({key:"start-recv", label: "→ Open receiver"})
             return acts5
         }
         // Notifications History
@@ -243,12 +230,12 @@ ShellRoot {
             return Math.round(audioVolume * 100) + "%"
         }
         if (key === "left.send") {
-            if (!kdeConnectAvailable) return "KDE Connect not installed"
-            return kdeDevices.length + " device" + (kdeDevices.length !== 1 ? "s" : "") + " available"
+            if (pendingFilePath === "") return "Ready · pick a file"
+            return qshareTunnel ? "Tunnel mode" : "LAN mode"
         }
         if (key === "left.receive") {
-            if (!kdeConnectAvailable) return "KDE Connect not installed"
-            return "Listening · " + kdeDevices.length + " peer" + (kdeDevices.length !== 1 ? "s" : "")
+            return qshareTunnel ? "Tunnel · " + qshareOutputDir.replace(home, "~")
+                                : "LAN · " + qshareOutputDir.replace(home, "~")
         }
         if (key === "right.history") {
             return notifications.length + " notification" + (notifications.length !== 1 ? "s" : "")
@@ -265,8 +252,8 @@ ShellRoot {
         if (key === "top.bluetooth")     return btEnabled
         if (key === "bottom.output")     return true
         if (key === "bottom.volume")     return !audioMuted
-        if (key === "left.send")         return kdeConnectAvailable && kdeDevices.length > 0
-        if (key === "left.receive")      return kdeConnectAvailable
+        if (key === "left.send")         return pendingFilePath !== ""
+        if (key === "left.receive")      return qshareUrl !== ""
         if (key === "right.history")     return notifications.length > 0
         if (key === "right.dnd")         return dndEnabled
         var d3 = root.details[key]
@@ -458,65 +445,32 @@ ShellRoot {
         dndEnabled = state
     }
 
-    // ── Données système : Quickshare (KDE Connect) ──
-    property bool   kdeConnectAvailable: true
-    property var    kdeDevices: []   // [{id, name, reachable, trusted, paired}]
+    // ── Données système : Quickshare (qshare.py) ──
     property string pendingFilePath: ""   // chemin de fichier sélectionné, en attente d'envoi
+
+    // ── État qshare ──
+    property bool   qshareTunnel:    false
+    property bool   qshareKeepAlive: false
+    property string qshareOutputDir: home + "/Downloads"
+    property string qshareUrl:       ""     // URL active (modal visible si non vide)
+    property string qshareQrPath:    ""     // chemin du PNG QR
+    property string qshareLabel:     ""     // ex. "envoi : photo.jpg" ou "réception → ~/Downloads"
+    property string qshareLastTick:  ""     // dernier fichier transféré (pour feedback)
+    property bool   qshareCancelled: false
+    readonly property string qshareScriptPath: xdgConfigHome + "/quickshell/scripts/qshare.py"
+    readonly property string qshareEventFile:  "/tmp/qshare-events"
+    readonly property string qshareQrFile:     "/tmp/qshare-qr.png"
+
+    readonly property var qshareOutputDirs: [
+        home + "/Downloads",
+        home + "/Pictures",
+        home + "/Documents",
+        "/tmp"
+    ]
 
     Timer {
         interval: 3000; running: root.open && root.slot === "left"; repeat: true; triggeredOnStart: true
-        onTriggered: pollKde.running = true
-    }
-    Process {
-        id: pollKde
-        // Liste tous les devices (paired et available) avec leur état
-        command: ["sh","-c",
-            "if ! command -v kdeconnect-cli >/dev/null 2>&1; then echo 'NOKDE'; exit; fi; " +
-            // -a : available (joinable), --id-name-only sort: ID NAME
-            "kdeconnect-cli -a --id-name-only 2>/dev/null | sed 's/^/REACHABLE:/'; " +
-            "kdeconnect-cli -l --id-name-only 2>/dev/null | sed 's/^/ALL:/'"
-        ]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var lines = this.text.trim().split("\n")
-                if (lines.length > 0 && lines[0] === "NOKDE") {
-                    root.kdeConnectAvailable = false
-                    root.kdeDevices = []
-                    return
-                }
-                root.kdeConnectAvailable = true
-                var reachable = {}
-                var seen = {}
-                var devices = []
-                for (var i = 0; i < lines.length; i++) {
-                    var line = lines[i].trim()
-                    if (!line) continue
-                    if (line.indexOf("REACHABLE:") === 0) {
-                        var rest = line.substring(10)
-                        var sp = rest.indexOf(" ")
-                        if (sp > 0) reachable[rest.substring(0, sp)] = true
-                    } else if (line.indexOf("ALL:") === 0) {
-                        var rest2 = line.substring(4)
-                        var sp2 = rest2.indexOf(" ")
-                        if (sp2 < 0) continue
-                        var id = rest2.substring(0, sp2)
-                        if (seen[id]) continue
-                        seen[id] = true
-                        devices.push({
-                            id: id,
-                            name: rest2.substring(sp2 + 1).trim(),
-                            reachable: !!reachable[id]
-                        })
-                    }
-                }
-                // Trier : reachable d'abord, puis nom
-                devices.sort(function(a,b){
-                    if (a.reachable !== b.reachable) return a.reachable ? -1 : 1
-                    return a.name.localeCompare(b.name)
-                })
-                root.kdeDevices = devices
-            }
-        }
+        onTriggered: qshareEventReader.running = qshareProc.running
     }
 
     // Process qui lance Yazi pour picker un fichier
@@ -557,6 +511,119 @@ ShellRoot {
                         root.slot = "left"
                         root.sub = "send"
                         root.action = root.firstAction()
+                    }
+                }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //   qshare.py — process + event polling + lancement/arrêt
+    // ═══════════════════════════════════════════════════════════════════
+
+    function startQshare(mode, filePath) {
+        // Reset state
+        root.qshareUrl = ""
+        root.qshareQrPath = ""
+        root.qshareLastTick = ""
+        root.qshareCancelled = false
+
+        // Cleanup ancien event/QR file (sync via touch)
+        cleanupQshareProc.command = ["sh","-c",
+            "rm -f " + qshareEventFile + " " + qshareQrFile + "; " +
+            "touch " + qshareEventFile]
+        cleanupQshareProc.running = true
+
+        // Construit la commande
+        var args = [qshareScriptPath, mode]
+        if (mode === "send") {
+            args.push(filePath)
+            qshareLabel = "envoi : " + filePath.split("/").pop()
+        } else {
+            args.push("-o"); args.push(qshareOutputDir)
+            qshareLabel = "réception → " + qshareOutputDir.replace(home, "~")
+        }
+        if (qshareTunnel)    args.push("--tunnel")
+        if (qshareKeepAlive) args.push("--keep-alive")
+        args.push("--qr-out");     args.push(qshareQrFile)
+        args.push("--event-file"); args.push(qshareEventFile)
+
+        qshareProc.command = args
+        qshareProc.running = true
+        qshareEventPoll.running = true
+    }
+
+    function stopQshare() {
+        qshareCancelled = true
+        qshareProc.running = false   // SIGTERM
+        qshareEventPoll.running = false
+        qshareUrl = ""
+        qshareQrPath = ""
+        // Reset pendingFilePath après un envoi
+        pendingFilePath = ""
+    }
+
+    Process { id: cleanupQshareProc; command: ["sh","-c","true"]; running: false }
+
+    Process {
+        id: qshareProc
+        running: false
+        command: ["sh","-c","true"]
+        // stdout/stderr ignorés — on s'en remet à l'event-file
+        onRunningChanged: {
+            if (!running) {
+                // Process terminé → ferme le modal après un petit délai pour
+                // laisser le temps de voir le tick final
+                qshareEventPoll.running = false
+                qshareCloseTimer.restart()
+            }
+        }
+    }
+
+    Timer {
+        id: qshareCloseTimer
+        interval: qshareCancelled ? 0 : 600
+        repeat: false
+        onTriggered: {
+            qshareUrl = ""
+            qshareQrPath = ""
+            qshareLastTick = ""
+            // Reset pendingFilePath après un transfert send réussi
+            if (!qshareCancelled && root.sub === "send") {
+                pendingFilePath = ""
+            }
+        }
+    }
+
+    // Poll l'event-file pour récupérer URL/QR/TICK/DONE
+    Timer {
+        id: qshareEventPoll
+        interval: 250
+        repeat: true
+        running: false
+        onTriggered: qshareEventReader.running = true
+    }
+
+    Process {
+        id: qshareEventReader
+        running: false
+        command: ["sh","-c","cat " + root.qshareEventFile + " 2>/dev/null"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var lines = this.text.split("\n")
+                for (var i = 0; i < lines.length; i++) {
+                    var line = lines[i].trim()
+                    if (!line) continue
+                    if (line.indexOf("URL ") === 0) {
+                        root.qshareUrl = line.substring(4)
+                    } else if (line.indexOf("QR ") === 0) {
+                        root.qshareQrPath = line.substring(3)
+                    } else if (line.indexOf("TICK ") === 0) {
+                        root.qshareLastTick = line.substring(5)
+                    } else if (line === "DONE") {
+                        // Le process va s'arrêter tout seul, le onRunningChanged gère
+                    } else if (line === "CANCELLED") {
+                        root.qshareCancelled = true
                     }
                 }
             }
@@ -663,7 +730,6 @@ ShellRoot {
     onSlotChanged: {
         if (slot === "top")    { pollWifi.running = true; pollBt.running = true }
         if (slot === "bottom") { pollAudio.running = true }
-        if (slot === "left")   { pollKde.running = true }
         if (slot === "right")  {
             pollNotifsHistory.running = true
             pollNotifsDnd.running = true
@@ -761,13 +827,10 @@ ShellRoot {
                 cmd = "pactl set-sink-volume @DEFAULT_SINK@ " + vol + "%"
             }
         }
-        // ── Quickshare Send ──
+        // ── Quickshare Send (qshare.py) ──
         else if (slotKey === "left" && subKey === "send") {
-            if (actionKey === "install") {
-                cmd = "xdg-open https://userbase.kde.org/KDEConnect &"
-            } else if (actionKey === "pick-file") {
+            if (actionKey === "pick-file") {
                 // Lance le terminal flottant avec yazi, puis ferme le ControlCenter
-                // pour que la fenêtre yazi soit accessible (sinon overlay nous bloque)
                 cmd =
                     "rm -f /tmp/yzi-out; " +
                     "if command -v foot >/dev/null 2>&1; then " +
@@ -779,7 +842,7 @@ ShellRoot {
                     "elif command -v wezterm >/dev/null 2>&1; then " +
                     "  wezterm start --class qs-yazi-picker -- yazi --chooser-file=/tmp/yzi-out & " +
                     "else " +
-                    "  notify-send 'Quickshare' 'No supported terminal found (foot/alacritty/kitty/wezterm)'; " +
+                    "  notify-send 'qshare' 'No supported terminal found (foot/alacritty/kitty/wezterm)'; " +
                     "fi"
                 actProc.command = ["sh","-c", cmd]
                 actProc.running = true
@@ -791,34 +854,33 @@ ShellRoot {
             } else if (actionKey === "clear-file") {
                 pendingFilePath = ""
                 return
-            } else if (actionKey === "refresh") {
-                cmd = "kdeconnect-cli --refresh"
-            } else if (actionKey.indexOf("send-to:") === 0) {
-                var devId = actionKey.substring(8)
-                if (pendingFilePath) {
-                    cmd = "kdeconnect-cli --share '" + pendingFilePath.replace(/'/g, "'\\''") +
-                          "' --device '" + devId + "'"
-                    pendingFilePath = ""
-                }
-            } else if (actionKey.indexOf("info:") === 0) {
-                return  // pas d'action sur info
+            } else if (actionKey === "toggle-tunnel") {
+                qshareTunnel = !qshareTunnel
+                return
+            } else if (actionKey === "toggle-keepalive") {
+                qshareKeepAlive = !qshareKeepAlive
+                return
+            } else if (actionKey === "start-send") {
+                if (pendingFilePath === "") return
+                root.startQshare("send", pendingFilePath)
+                return
             }
         }
-        // ── Quickshare Receive ──
+        // ── Quickshare Receive (qshare.py) ──
         else if (slotKey === "left" && subKey === "receive") {
-            if (actionKey === "install") {
-                cmd = "xdg-open https://userbase.kde.org/KDEConnect &"
-            } else if (actionKey === "open-settings") {
-                cmd = "kdeconnect-app &"
-            } else if (actionKey === "refresh") {
-                cmd = "kdeconnect-cli --refresh"
-            } else if (actionKey.indexOf("pair:") === 0) {
-                var pid = actionKey.substring(5)
-                cmd = "kdeconnect-cli --pair --device '" + pid + "'"
-            } else if (actionKey.indexOf("unpair:") === 0) {
-                var uid = actionKey.substring(7)
-                cmd = "kdeconnect-cli --unpair --device '" + uid + "'"
-            } else if (actionKey.indexOf("info:") === 0) {
+            if (actionKey === "toggle-tunnel") {
+                qshareTunnel = !qshareTunnel
+                return
+            } else if (actionKey === "toggle-keepalive") {
+                qshareKeepAlive = !qshareKeepAlive
+                return
+            } else if (actionKey === "cycle-output") {
+                var dirs = qshareOutputDirs
+                var idx = dirs.indexOf(qshareOutputDir)
+                qshareOutputDir = dirs[(idx + 1) % dirs.length]
+                return
+            } else if (actionKey === "start-recv") {
+                root.startQshare("recv", "")
                 return
             }
         }
@@ -1131,6 +1193,185 @@ ShellRoot {
                         anchors.horizontalCenterOffset: (root.open && !root.closing) ? root.slotGapH : 0
                         Behavior on anchors.horizontalCenterOffset {
                             NumberAnimation { duration: 250; easing.type: Easing.InCirc; }
+                        }
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════════
+                //   QR Modal qshare (visible quand qshareUrl !== "")
+                // ═══════════════════════════════════════════════════════
+                Rectangle {
+                    id: qrBackdrop
+                    anchors.fill: parent
+                    color: "#000000"
+                    opacity: (root.qshareUrl !== "" && isActive) ? 0.55 : 0
+                    visible: opacity > 0
+                    z: 100
+                    Behavior on opacity { NumberAnimation { duration: 280 } }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.stopQshare()
+                        enabled: root.qshareUrl !== ""
+                    }
+                }
+
+                Item {
+                    id: qrModal
+                    anchors.centerIn: parent
+                    width: 380; height: 500
+                    z: 101
+                    opacity: (root.qshareUrl !== "" && isActive) ? 1 : 0
+                    visible: opacity > 0
+                    scale: (root.qshareUrl !== "" && isActive) ? 1.0 : 0.92
+                    Behavior on opacity { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+                    Behavior on scale   { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
+
+                    // Fond carte
+                    Rectangle {
+                        anchors.fill: parent
+                        color: root.colCard
+                        border.color: root.colInk
+                        border.width: 1
+                    }
+                    // Bordure interne décalée
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        color: "transparent"
+                        border.color: root.colInk
+                        border.width: 1
+                        opacity: 0.35
+                    }
+                    // Coins en L
+                    Repeater {
+                        model: 4
+                        Item {
+                            width: 8; height: 8
+                            x: (index === 0 || index === 2) ? 6 : (qrModal.width - 8)
+                            y: (index < 2) ? -2 : (qrModal.height - 8 + 2)
+                            z: 3
+                            Rectangle { width: 8; height: 2; color: root.colInk; y: (index < 2) ? 0 : 6 }
+                            Rectangle { width: 2; height: 8; color: root.colInk; x: (index === 0 || index === 2) ? 0 : 6 }
+                        }
+                    }
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 24
+                        spacing: 12
+
+                        // Header
+                        Text {
+                            text: "QSHARE"
+                            font.family: "Inter"
+                            font.pixelSize: 11
+                            font.letterSpacing: 5
+                            font.weight: Font.Medium
+                            color: root.colInk
+                            opacity: 0.6
+                        }
+                        Rectangle { width: 36; height: 1; color: root.colInk; opacity: 0.5 }
+
+                        Item { width: 1; height: 4 }
+
+                        // Label (envoi/réception)
+                        Text {
+                            width: parent.width
+                            text: root.qshareLabel
+                            font.family: "Inter"
+                            font.pixelSize: 12
+                            font.weight: Font.Medium
+                            color: root.colInk
+                            elide: Text.ElideMiddle
+                        }
+
+                        // QR area
+                        Item {
+                            width: parent.width
+                            height: 280
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 280; height: 280
+                                color: root.colHi
+                                Image {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    source: root.qshareQrPath !== ""
+                                            ? "file://" + root.qshareQrPath + "?t=" + Date.now()
+                                            : ""
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: false
+                                    cache: false
+                                    asynchronous: true
+                                }
+                                // Loading state
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: root.qshareQrPath === ""
+                                    text: "GENERATING…"
+                                    font.family: "Inter"
+                                    font.pixelSize: 10
+                                    font.letterSpacing: 3
+                                    color: root.colCard
+                                    opacity: 0.6
+                                }
+                            }
+                        }
+
+                        // URL en petit
+                        Text {
+                            width: parent.width
+                            text: root.qshareUrl
+                            font.family: "Iosevka, monospace"
+                            font.pixelSize: 9
+                            color: root.colInk
+                            opacity: 0.55
+                            elide: Text.ElideMiddle
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        // Tick / Status
+                        Text {
+                            width: parent.width
+                            text: root.qshareLastTick !== ""
+                                  ? "✓ " + root.qshareLastTick
+                                  : "Scan with phone…"
+                            font.family: "Inter"
+                            font.pixelSize: 10
+                            font.letterSpacing: 1.5
+                            color: root.colInk
+                            opacity: 0.7
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+
+                    // Bouton Cancel/Stop en bas-droite
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 14
+                        width: 90; height: 26
+                        color: cancelMA.containsMouse ? root.colInk : "transparent"
+                        border.color: root.colInk
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 180 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.qshareKeepAlive ? "× STOP" : "× CANCEL"
+                            font.family: "Inter"
+                            font.pixelSize: 10
+                            font.letterSpacing: 2.5
+                            font.weight: Font.Medium
+                            color: cancelMA.containsMouse ? root.colCard : root.colInk
+                            Behavior on color { ColorAnimation { duration: 180 } }
+                        }
+                        MouseArea {
+                            id: cancelMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.stopQshare()
                         }
                     }
                 }
