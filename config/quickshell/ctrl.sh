@@ -10,12 +10,6 @@
 
 set -e
 
-# Vérifie que Quickshell tourne (sinon l'IPC échoue silencieusement)
-if ! pgrep -x quickshell >/dev/null 2>&1; then
-    notify-send "ControlCenter" "Quickshell is not running" -u low -t 2000
-    exit 1
-fi
-
 pkill cloudflared
 # Envoie la commande IPC (target=ctrl, method=$1 ou 'toggle' par défaut)
 exec qs ipc call ctrl "${1:-toggle}"
