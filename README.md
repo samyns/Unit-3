@@ -1,3 +1,6 @@
+> [!WARNING]
+> **Hyprland v0.55+ Lua migration** — This config uses legacy hyprlang syntax (supported until ~v0.57). Pin to v0.54 or wait for the Lua port. 
+
 # Unit-3
 
 Hyprland + Quickshell + Waybar rice for Arch Linux, with a NieR:Automata aesthetic.
