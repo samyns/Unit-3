@@ -35,6 +35,55 @@ curl -fsSL https://raw.githubusercontent.com/samyns/Unit-3/main/install.sh | bas
 - **Terminal**: Kitty
 - **Theme**: NieR-inspired with custom video transitions
 
+## Control Center
+
+A NieR:Automata-style radial menu accessible via `SUPER + Tab`. The interface is built around a cross of four sub-menus orbiting a central node, with full keyboard navigation.
+
+> [!NOTE]
+> The Control Center runs as a separate Quickshell instance and exposes an IPC target named `ctrl`. It can also be toggled from anywhere via `qs ipc call ctrl toggle`.
+
+https://github-production-user-asset-6210df.s3.amazonaws.com/102748858/590523311-2ce7dc52-bffb-43b9-acf0-cfcdc42aadb8.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260511%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260511T144937Z&X-Amz-Expires=300&X-Amz-Signature=e8595addcfe5bcf43b9f9265de0280b5788952a0f8cdea90e6aa9b2547a7b054&X-Amz-SignedHeaders=host&response-content-type=video%2Fmp4
+
+### Features
+
+- **Connexion** — Wi-Fi & Bluetooth
+  - Toggle radio on/off
+  - Scan and connect to Wi-Fi networks with an inline password prompt (no external GUI)
+  - List paired Bluetooth devices with connect/disconnect, pair, unpair, and live scan for new devices
+- **Audio** — Output & Volume
+  - Switch between PipeWire/PulseAudio sinks on the fly
+  - Interactive volume slider (click to set, scroll to adjust, right-click to mute)
+- **Quickshare** — Send & Receive (KDE Connect)
+  - Pick files via a floating Yazi instance and send to paired devices
+  - Pair/unpair devices directly from the panel, with a refresh button for discovery
+  - Falls back to a clear "Install KDE Connect" prompt if missing
+- **Notifications** — History & DND
+  - Live history fed by the Quickshell notification daemon (no `mako`/`dunst` needed)
+  - Click a notification once to expand (body, urgency, category, app, actions), click again to invoke the source app
+  - Do Not Disturb toggle silences popups while preserving history
+  - Pinned "Clear All" button
+
+### Navigation
+
+The menu uses three focus levels:
+
+- **L1 — Overview**: navigate between the four slots and the center node
+- **L3 — Settings**: focus inside a sub-menu (sub-item + first action are focused simultaneously)
+
+| Key | Action |
+|---|---|
+| `W` / `↑` | Move up (or scroll up in lists) |
+| `A` / `←` | Move left (or scroll left in actions) |
+| `S` / `↓` | Move down (or scroll down in lists) |
+| `D` / `→` | Move right (or scroll right in actions) |
+| `Enter` / `Space` | Activate focused action (or expand a notification) |
+| `Esc` | Back to center (or close menu) |
+
+**From the center node**, pressing any direction enters the corresponding sub-menu directly (no double-press). **From a slot**, pressing the same direction enters its settings; pressing the opposite direction returns to center.
+
+When you focus a sub-menu, the whole cross slides ("pulls the tablecloth") to bring the focused panel closer to the center, while the other slots dim but stay visible.
+
+
 ## Customization
 
 Personal overrides go in `~/.config/hypr/user.conf` — this file is **never** overwritten by updates.
