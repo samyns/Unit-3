@@ -121,6 +121,7 @@ EOF
 
 ## Star History
 
+[![oosmetrics](https://api.oosmetrics.com/api/v1/badge/achievement/e4d18ba3-961a-444a-99fb-aff540f61553.svg)](https://oosmetrics.com/repo/samyns/Unit-3)
 
 <a href="https://www.star-history.com/?repos=samyns%2FUnit-3&type=date&legend=top-left">
  <picture>
