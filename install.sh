@@ -17,6 +17,7 @@ readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 # Relative to $CONFIG_HOME.
 readonly PRESERVED_FILES=(
     "hypr/user.conf"
+    "quickshell/settings/Settings.qml"
 )
 
 # Add support for flags
