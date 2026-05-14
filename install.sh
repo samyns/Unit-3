@@ -13,6 +13,12 @@ BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
 readonly BACKUP_DIR
 readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 
+# Files that must NEVER be overwritten by re-running the installer.
+# Relative to $CONFIG_HOME.
+readonly PRESERVED_FILES=(
+    "hypr/user.conf"
+)
+
 # Add support for flags
 PINNED_MODE=false
 VM_GL_TWEAKS=false          # Mesa llvmpipe + libgl software for Quickshell/Kitty (VirtualBox et al.)
@@ -45,6 +51,9 @@ done
 # Folders managed by this installer (touched in $CONFIG_HOME)
 readonly MANAGED_DIRS=(hypr quickshell waybar kitty dunst)
 
+# Temp dir used to stash preserved user files during install
+PRESERVED_STASH=""
+
 # ─── Colors & logging ───────────────────────────────────────────────
 if [[ -t 1 ]]; then
     C_RED=$'\033[0;31m';   C_GREEN=$'\033[0;32m'
@@ -73,7 +82,10 @@ ask_yn() {
     done
 }
 
-cleanup() { [[ -d "$CLONE_DIR" ]] && rm -rf "$CLONE_DIR"; }
+cleanup() {
+    [[ -d "$CLONE_DIR" ]] && rm -rf "$CLONE_DIR"
+    [[ -n "$PRESERVED_STASH" && -d "$PRESERVED_STASH" ]] && rm -rf "$PRESERVED_STASH"
+}
 trap cleanup EXIT
 
 # ─── Pre-flight ─────────────────────────────────────────────────────
@@ -205,9 +217,48 @@ install_pinned_from_archive() {
     fi
 }
 
+# ─── Preserve user files across re-installs ─────────────────────────
+# Stash all files listed in PRESERVED_FILES to a temp dir BEFORE deploy_configs
+# wipes the managed dirs. They will be restored AFTER the copy.
+stash_preserved_files() {
+    PRESERVED_STASH=$(mktemp -d)
+    local count=0
+    for rel in "${PRESERVED_FILES[@]}"; do
+        local src="$CONFIG_HOME/$rel"
+        if [[ -f "$src" ]]; then
+            local stash="$PRESERVED_STASH/$rel"
+            mkdir -p "$(dirname "$stash")"
+            cp -a "$src" "$stash"
+            count=$((count + 1))
+        fi
+    done
+    if (( count > 0 )); then
+        ok "Preserved $count user file(s) for restoration after install."
+    fi
+}
+
+# Restore preserved files (overwrites whatever the repo copy put in their place).
+restore_preserved_files() {
+    [[ -z "$PRESERVED_STASH" || ! -d "$PRESERVED_STASH" ]] && return 0
+    for rel in "${PRESERVED_FILES[@]}"; do
+        local stash="$PRESERVED_STASH/$rel"
+        local dest="$CONFIG_HOME/$rel"
+        if [[ -f "$stash" ]]; then
+            mkdir -p "$(dirname "$dest")"
+            cp -a "$stash" "$dest"
+            ok "Restored user file: $rel"
+        fi
+    done
+}
+
 # ─── Deploy configs ─────────────────────────────────────────────────
 deploy_configs() {
     mkdir -p "$CONFIG_HOME"
+
+    # 1. Stash files that must survive the install.
+    stash_preserved_files
+
+    # 2. Backup or remove existing managed dirs, then copy fresh from repo.
     for name in "${MANAGED_DIRS[@]}"; do
         local src="$CLONE_DIR/config/$name"
         local dest="$CONFIG_HOME/$name"
@@ -227,12 +278,16 @@ deploy_configs() {
         cp -r "$src" "$dest"
     done
 
-    # Make all .sh / .py executable
+    # 3. Restore preserved user files (overwrites any template the repo provided).
+    restore_preserved_files
+
+    # 4. Make all .sh / .py executable.
     log "Setting executable bits on scripts…"
     find "$CONFIG_HOME/hypr" "$CONFIG_HOME/quickshell" "$CONFIG_HOME/waybar" \
         -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod +x {} + 2>/dev/null || true
 
-    # Create the user override file (NEVER overwritten on update)
+    # 5. Create the user override file if it still doesn't exist
+    #    (first-time install, nothing to restore).
     local user_conf="$CONFIG_HOME/hypr/user.conf"
     if [[ ! -f "$user_conf" ]]; then
         cat > "$user_conf" <<'EOF'
@@ -249,6 +304,8 @@ deploy_configs() {
 # ═══════════════════════════════════════════════════════════════════
 EOF
         ok "Created empty user.conf for your personal overrides."
+    else
+        ok "Existing user.conf preserved."
     fi
 }
 
