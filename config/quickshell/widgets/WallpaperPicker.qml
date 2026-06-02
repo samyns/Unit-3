@@ -55,9 +55,9 @@ ShellRoot {
         if (root.wallpapers.length === 0) return
         var file = root.wallpaperDir + "/" + root.wallpapers[idx]
         var cmd = monitor === "both"
-            ? "awww img " + file
-            : "awww img --outputs " + monitor + " " + file
-        applyProc.command = ["sh","-c", cmd]
+            ? "awww img \"" + file + "\""
+            : "awww img --outputs " + monitor + " \"" + file + "\""
+        applyProc.command = ["sh", "-c", cmd]
         applyProc.running = true
     }
 
@@ -88,7 +88,7 @@ ShellRoot {
             screen: modelData
             anchors.top:true;anchors.left:true;anchors.right:true;anchors.bottom:true
             exclusionMode: ExclusionMode.Ignore
-            color: "black"
+            color: "transparent"
             implicitWidth: modelData.width; implicitHeight: modelData.height
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: (root.frozen && !root.hiding && !root.done
@@ -285,7 +285,8 @@ ShellRoot {
                     Keys.onRightPressed:  root.navigate(1)
                     Keys.onUpPressed:     root.navigate(-1)
                     Keys.onDownPressed:   root.navigate(1)
-
+                    Keys.onReturnPressed:  { root.applyWallpaper(root.currentIndex, "both"); root.doClose() }
+                    Keys.onSpacePressed:  { root.applyWallpaper(root.currentIndex, "both"); root.doClose() }
                     readonly property int n: root.wallpapers.length
 
                     // Dimensions de base (taille de la vignette centrale à pleine échelle)
