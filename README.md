@@ -123,10 +123,12 @@ EOF
 
 [![oosmetrics](https://api.oosmetrics.com/api/v1/badge/achievement/e4d18ba3-961a-444a-99fb-aff540f61553.svg)](https://oosmetrics.com/repo/samyns/Unit-3)
 
-<a href="https://star-history.dera.page/#samyns/Unit-3&type=date&legend=top-left">
+## Star History
+
+<a href="https://star-history.dera.page/samyns/Unit-3">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=samyns/Unit-3&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=samyns/Unit-3&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=samyns/Unit-3&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=samyns/Unit-3&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=samyns/Unit-3" />
+   <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=samyns/Unit-3" />
  </picture>
 </a>
